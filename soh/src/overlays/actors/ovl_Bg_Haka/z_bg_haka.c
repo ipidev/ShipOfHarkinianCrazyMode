@@ -7,6 +7,9 @@
 #include "z_bg_haka.h"
 #include "objects/object_haka/object_haka.h"
 
+//ipi: To explode
+#include "overlays/actors/ovl_En_Bom/z_en_bom.h"
+
 #define FLAGS 0
 
 void BgHaka_Init(Actor* thisx, PlayState* play);
@@ -136,7 +139,18 @@ void func_8087B938(BgHaka* this, PlayState* play) {
             }
         }
 
-        this->actionFunc = func_8087BAAC;
+        // Blow up graves once pulled
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            EnBom* bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->dyna.actor.world.pos.x,
+                        this->dyna.actor.world.pos.y, this->dyna.actor.world.pos.z, 0, 0, 0,
+                        BOMB_BODY, true);
+            if (bomb != NULL) {
+                bomb->timer = 0;
+                Actor_Kill(&this->dyna.actor);
+            }
+        } else {
+            this->actionFunc = func_8087BAAC;
+        }
     }
     func_8002F974(&this->dyna.actor, NA_SE_EV_ROCK_SLIDE - SFX_FLAG);
 }
