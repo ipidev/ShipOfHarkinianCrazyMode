@@ -80,7 +80,8 @@ void EnDodojr_Init(Actor* thisx, PlayState* play) {
     this->actor.naviEnemyId = 0xE;
     this->actor.flags &= ~ACTOR_FLAG_TARGETABLE;
 
-    Actor_SetScale(&this->actor, 0.02f);
+    //ipi: Start bigger in crazy mode, will split on death
+    Actor_SetScale(&this->actor, CVarGetInteger("gIpiCrazyMode", 0) ? 0.06f : 0.02f);
 
     this->actionFunc = func_809F73AC;
 }
@@ -169,7 +170,12 @@ void func_809F6994(EnDodojr* this) {
 
     Animation_Change(&this->skelAnime, &object_dodojr_Anim_000860, 1.8f, 0.0f, lastFrame, ANIMMODE_LOOP_INTERP, -10.0f);
     this->actor.velocity.y = 0.0f;
-    this->actor.speedXZ = 2.6f;
+    //ipi: Babies are faster in crazy mode
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.scale.x <= 0.02f) {
+        this->actor.speedXZ = 4.0f;
+    } else {
+        this->actor.speedXZ = 2.6f;
+    }
     this->actor.gravity = -0.8f;
 }
 
@@ -427,7 +433,12 @@ void func_809F74C4(EnDodojr* this, PlayState* play) {
     if (sp2C == 0.0f) {
         this->actor.shape.shadowDraw = ActorShadow_DrawCircle;
         this->actor.world.rot.x = this->actor.shape.rot.x;
-        this->actor.speedXZ = 2.6f;
+        //ipi: Babies are faster in crazy mode
+        if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.scale.x <= 0.02f) {
+            this->actor.speedXZ = 4.0f;
+        } else {
+            this->actor.speedXZ = 2.6f;
+        }
         this->actionFunc = func_809F758C;
     }
 }
@@ -583,11 +594,24 @@ void func_809F7B3C(EnDodojr* this, PlayState* play) {
             this->unk_1FC--;
         }
     } else {
-        bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->actor.world.pos.x,
-                                   this->actor.world.pos.y, this->actor.world.pos.z, 0, 0, 0, BOMB_BODY, true);
+        //ipi: Spawn babies!
+        if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.scale.x > 0.03f) {
+            for (u8 i = 0; i < 3; i++)
+            {
+                EnDodojr* baby = (EnDodojr*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_DODOJR, this->actor.world.pos.x,
+                    this->actor.world.pos.y, this->actor.world.pos.z, 0, this->actor.world.rot.y + (i * 20000), 0, 0, false);
+                if (baby != NULL) {
+                    Actor_SetScale(&baby->actor, 0.02f);
+                    baby->actionFunc = func_809F74C4;
+                }
+            }
+        } else {
+            bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->actor.world.pos.x,
+                                    this->actor.world.pos.y, this->actor.world.pos.z, 0, 0, 0, BOMB_BODY, true);
 
-        if (bomb != NULL) {
-            bomb->timer = 0;
+            if (bomb != NULL) {
+                bomb->timer = 0;
+            }
         }
 
         this->timer3 = 8;
