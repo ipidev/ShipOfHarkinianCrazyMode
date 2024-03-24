@@ -320,7 +320,8 @@ void EnDodongo_Init(Actor* thisx, PlayState* play) {
     Actor_SetScale(&this->actor, 0.01875f);
     SkelAnime_Init(play, &this->skelAnime, &gDodongoSkel, &gDodongoWaitAnim, this->jointTable, this->morphTable,
                    31);
-    this->actor.colChkInfo.health = 4;
+    //ipi: Tankier in crazy mode
+    this->actor.colChkInfo.health = CVarGetInteger("gIpiCrazyMode", 0) ? 8 : 4;
     this->actor.colChkInfo.mass = MASS_HEAVY;
     this->actor.colChkInfo.damageTable = &sDamageTable;
     Collider_InitQuad(play, &this->colliderAT);
@@ -361,7 +362,7 @@ void EnDodongo_Destroy(Actor* thisx, PlayState* play) {
 void EnDodongo_SetupIdle(EnDodongo* this) {
     Animation_MorphToLoop(&this->skelAnime, &gDodongoWaitAnim, -4.0f);
     this->actor.speedXZ = 0.0f;
-    this->timer = Rand_S16Offset(30, 50);
+    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 1 : Rand_S16Offset(30, 50);
     this->actionState = DODONGO_IDLE;
     EnDodongo_SetupAction(this, EnDodongo_Idle);
 }
@@ -382,6 +383,10 @@ void EnDodongo_SetupBreatheFire(EnDodongo* this) {
     this->actionState = DODONGO_BREATHE_FIRE;
     this->actor.speedXZ = 0.0f;
     EnDodongo_SetupAction(this, EnDodongo_BreatheFire);
+    //ipi: Charge up faster in crazy mode
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed = 4.0f;
+    }
 }
 
 void EnDodongo_SetupEndBreatheFire(EnDodongo* this) {
@@ -412,7 +417,8 @@ void EnDodongo_SetupStunned(EnDodongo* this) {
 
 void EnDodongo_Idle(EnDodongo* this, PlayState* play) {
     SkelAnime_Update(&this->skelAnime);
-    if ((DECR(this->timer) == 0) && Animation_OnFrame(&this->skelAnime, 0.0f)) {
+    //ipi: This looping animation takes forever
+    if ((DECR(this->timer) == 0) && (Animation_OnFrame(&this->skelAnime, 0.0f) || CVarGetInteger("gIpiCrazyMode", 0))) {
         EnDodongo_SetupWalk(this);
     }
 }
@@ -434,20 +440,39 @@ void EnDodongo_BreatheFire(EnDodongo* this, PlayState* play) {
 
     if ((s32)this->skelAnime.curFrame == 24) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_DODO_J_CRY);
+        //ipi: Finished charging, resume normal animation speed
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->skelAnime.playSpeed = 1.0f;
+        }
     }
     if ((29.0f <= this->skelAnime.curFrame) && (this->skelAnime.curFrame <= 43.0f)) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_DODO_J_FIRE - SFX_FLAG);
         fireFrame = this->skelAnime.curFrame - 29.0f;
         pos = this->actor.world.pos;
         pos.y += 35.0f;
-        EnDodongo_ShiftVecRadial(this->actor.world.rot.y, 30.0f, &pos);
-        EnDodongo_ShiftVecRadial(this->actor.world.rot.y, 2.5f, &accel);
+        //ipi: Beyblade!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->actor.world.rot.y = this->actor.yawTowardsPlayer;
+            static s16 spinSpeed = 6000;
+            this->actor.shape.rot.y += spinSpeed;
+            this->actor.speedXZ = 3.0f;
+        }
+        //ipi: Use the shape rotation instead, since that's what spins us
+        s16 fireRotation = CVarGetInteger("gIpiCrazyMode", 0) ? this->actor.shape.rot.y : this->actor.world.rot.y;
+        EnDodongo_ShiftVecRadial(fireRotation, 30.0f, &pos);
+        EnDodongo_ShiftVecRadial(fireRotation, 2.5f, &accel);
         EffectSsDFire_SpawnFixedScale(play, &pos, &velocity, &accel, 255 - (fireFrame * 10), fireFrame + 3);
     } else if ((2.0f <= this->skelAnime.curFrame) && (this->skelAnime.curFrame <= 20.0f)) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_DODO_J_BREATH - SFX_FLAG);
     }
     if (SkelAnime_Update(&this->skelAnime)) {
-        EnDodongo_SetupEndBreatheFire(this);
+        //ipi: Go straight back to walking in crazy mode
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->actor.world.rot.y = this->actor.shape.rot.y;
+            EnDodongo_SetupWalk(this);
+        } else {
+            EnDodongo_SetupEndBreatheFire(this);
+        }
     }
 }
 
@@ -535,7 +560,8 @@ void EnDodongo_Walk(EnDodongo* this, PlayState* play) {
 
     yawDiff = ABS(yawDiff);
 
-    Math_SmoothStepToF(&this->actor.speedXZ, 1.5f, 0.1f, 1.0f, 0.0f);
+    f32 targetSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 3.0f : 1.5f;
+    Math_SmoothStepToF(&this->actor.speedXZ, targetSpeed, 0.1f, 1.0f, 0.0f);
 
     playbackSpeed = this->actor.speedXZ * 0.75f;
     if (this->actor.speedXZ >= 0.0f) {
@@ -564,10 +590,26 @@ void EnDodongo_Walk(EnDodongo* this, PlayState* play) {
         }
     }
 
-    if (Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos) < 400.0f) {
-        Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 0x1F4, 0);
+    //ipi: Will stray further from home
+    f32 homeDistance = CVarGetInteger("gIpiCrazyMode", 0) ? 600.0f : 400.0f;
+    if (Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos) < homeDistance) {
+        //ipi: Turn faster
+        s16 stepSize = CVarGetInteger("gIpiCrazyMode", 0) ? 0x400 : 0x1F4;
+        Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, stepSize, 0);
         this->actor.flags |= ACTOR_FLAG_TARGETABLE;
-        if ((this->actor.xzDistToPlayer < 100.0f) && (yawDiff < 0x1388) && (this->actor.yDistToPlayer < 60.0f)) {
+        //ipi: Much more aggressive, including starting tail attack if the player is very close
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            if ((this->actor.xzDistToPlayer < 200.0f) && (yawDiff < 0x2000) && (this->actor.yDistToPlayer < 60.0f)) {
+                EnDodongo_SetupBreatheFire(this);
+            } else if ((this->actor.xzDistToPlayer < 100.0f) && (yawDiff >= 0x3000) && (this->actor.yDistToPlayer < 60.0f)) {
+                //ipi: Similar to EnDodongo_SetupSweepTail but without initial damage
+                Animation_MorphToPlayOnce(&this->skelAnime, &gDodongoDamageAnim, -4.0f);
+                this->skelAnime.playSpeed = 5.0f;
+                this->actionState = DODONGO_SWEEP_TAIL;
+                this->timer = 0;
+                EnDodongo_SetupAction(this, EnDodongo_SweepTail);
+            }
+        } else if ((this->actor.xzDistToPlayer < 100.0f) && (yawDiff < 0x1388) && (this->actor.yDistToPlayer < 60.0f)) {
             EnDodongo_SetupBreatheFire(this);
         }
     } else {
