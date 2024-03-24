@@ -112,6 +112,13 @@ void BgIceTurara_Break(BgIceTurara* this, PlayState* play, f32 arg2) {
                                 30);
         }
     }
+
+    //ipi: Spawn ice keese upon breaking, because why not
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_FIREFLY, this->dyna.actor.world.pos.x,
+                            this->dyna.actor.world.pos.y + 40.0f, this->dyna.actor.world.pos.z, 0,
+                            this->dyna.actor.yawTowardsPlayer, 0, 4, true);
+    }
 }
 
 void BgIceTurara_Stalagmite(BgIceTurara* this, PlayState* play) {
