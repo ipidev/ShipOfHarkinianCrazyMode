@@ -3,6 +3,9 @@
 #include "objects/object_skb/object_skb.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
+//ipi: To spawn bombs
+#include "overlays/actors/ovl_En_Bom/z_en_bom.h"
+
 #define FLAGS (ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_UPDATE_WHILE_CULLED)
 
 void EnSkb_Init(Actor* thisx, PlayState* play);
@@ -101,6 +104,42 @@ static DamageTable sDamageTable = {
     /* Unknown 2     */ DMG_ENTRY(0, 0x0),
 };
 
+//ipi: Duplicate damage table except for explosives
+static DamageTable sIpiCrazyModeDamageTable = {
+    /* Deku nut      */ DMG_ENTRY(0, 0x1),
+    /* Deku stick    */ DMG_ENTRY(2, 0xF),
+    /* Slingshot     */ DMG_ENTRY(1, 0xF),
+    /* Explosive     */ DMG_ENTRY(0, 0x0),
+    /* Boomerang     */ DMG_ENTRY(0, 0x1),
+    /* Normal arrow  */ DMG_ENTRY(2, 0xF),
+    /* Hammer swing  */ DMG_ENTRY(2, 0xF),
+    /* Hookshot      */ DMG_ENTRY(0, 0x1),
+    /* Kokiri sword  */ DMG_ENTRY(1, 0xE),
+    /* Master sword  */ DMG_ENTRY(2, 0xF),
+    /* Giant's Knife */ DMG_ENTRY(4, 0xF),
+    /* Fire arrow    */ DMG_ENTRY(4, 0x7),
+    /* Ice arrow     */ DMG_ENTRY(2, 0xF),
+    /* Light arrow   */ DMG_ENTRY(2, 0xF),
+    /* Unk arrow 1   */ DMG_ENTRY(2, 0xF),
+    /* Unk arrow 2   */ DMG_ENTRY(0, 0x0),
+    /* Unk arrow 3   */ DMG_ENTRY(0, 0x0),
+    /* Fire magic    */ DMG_ENTRY(4, 0x7),
+    /* Ice magic     */ DMG_ENTRY(0, 0x6),
+    /* Light magic   */ DMG_ENTRY(3, 0xD),
+    /* Shield        */ DMG_ENTRY(0, 0x0),
+    /* Mirror Ray    */ DMG_ENTRY(0, 0x0),
+    /* Kokiri spin   */ DMG_ENTRY(1, 0xD),
+    /* Giant spin    */ DMG_ENTRY(4, 0xF),
+    /* Master spin   */ DMG_ENTRY(2, 0xF),
+    /* Kokiri jump   */ DMG_ENTRY(2, 0xF),
+    /* Giant jump    */ DMG_ENTRY(8, 0xF),
+    /* Master jump   */ DMG_ENTRY(4, 0xF),
+    /* Unknown 1     */ DMG_ENTRY(0, 0x0),
+    /* Unblockable   */ DMG_ENTRY(0, 0x0),
+    /* Hammer jump   */ DMG_ENTRY(4, 0xF),
+    /* Unknown 2     */ DMG_ENTRY(0, 0x0),
+};
+
 const ActorInit En_Skb_InitVars = {
     ACTOR_EN_SKB,
     ACTORCAT_ENEMY,
@@ -148,7 +187,8 @@ void EnSkb_Init(Actor* thisx, PlayState* play) {
     s16 paramOffsetArm;
 
     Actor_ProcessInitChain(&this->actor, sInitChain);
-    this->actor.colChkInfo.damageTable = &sDamageTable;
+    //ipi: Use separate damage table in crazy mode
+    this->actor.colChkInfo.damageTable = CVarGetInteger("gIpiCrazyMode", 0) ? &sIpiCrazyModeDamageTable : &sDamageTable;
     ActorShape_Init(&this->actor.shape, 0.0f, ActorShadow_DrawCircle, 0.0f);
     this->actor.focus.pos = this->actor.world.pos;
     this->actor.colChkInfo.mass = 0xFE;
@@ -250,11 +290,15 @@ void func_80AFCFF0(EnSkb* this, PlayState* play) {
 }
 
 void func_80AFD0A4(EnSkb* this) {
-    Animation_Change(&this->skelAnime, &gStalchildWalkingAnim, 0.96000004f, 0.0f,
+    //ipi: Animate really fast in crazy mode
+    f32 playSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 3.0f : 0.96000004f;
+    Animation_Change(&this->skelAnime, &gStalchildWalkingAnim, playSpeed, 0.0f,
                      Animation_GetLastFrame(&gStalchildWalkingAnim), ANIMMODE_LOOP, -4.0f);
     this->unk_280 = 4;
     this->unk_288 = 0;
-    this->actor.speedXZ = this->actor.scale.y * 160.0f;
+    //ipi: Walk really fast in crazy mode
+    f32 walkScalar = CVarGetInteger("gIpiCrazyMode", 0) ? 800.0f : 160.0f;
+    this->actor.speedXZ = this->actor.scale.y * walkScalar;
     EnSkb_SetupAction(this, EnSkb_Advance);
 }
 
@@ -314,6 +358,24 @@ void EnSkb_SetupAttack(EnSkb* this, PlayState* play) {
     if (frameData == 3) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_STALKID_ATTACK);
         this->unk_281 = 1;
+
+        //ipi: Throw a bomb
+        if (CVarGetInteger("gIpiCrazyMode", 0))
+        {
+            Vec3f spawnPos;
+            spawnPos.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y) * 100.0f * this->actor.scale.x);
+            spawnPos.y = this->actor.world.pos.y + (50.0f * this->actor.scale.y);
+            spawnPos.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y) * 100.0f * this->actor.scale.x);
+            EnBom* bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->actor.world.pos.x,
+                                        this->actor.world.pos.y, this->actor.world.pos.z, this->actor.world.rot.x,
+                                        this->actor.world.rot.y, this->actor.world.rot.z, BOMB_BODY, false);
+            if (bomb != NULL) {
+                bomb->timer = 15;
+                bomb->bombCollider.base.ocFlags2 = 0;   //Don't explode on contact with enemies
+                bomb->actor.velocity.y = 10.0f;
+                bomb->actor.speedXZ = 10.0f;
+            }
+        }
     } else if (frameData == 6) {
         this->unk_281 = 0;
     }
