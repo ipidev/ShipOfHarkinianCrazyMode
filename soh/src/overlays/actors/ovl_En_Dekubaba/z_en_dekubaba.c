@@ -306,7 +306,8 @@ void EnDekubaba_SetupWait(EnDekubaba* this) {
 
     this->collider.base.colType = COLTYPE_HARD;
     this->collider.base.acFlags |= AC_HARD;
-    this->timer = 45;
+    //ipi: Don't wait in crazy mode
+    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 1 : 45;
 
     for (i = 1; i < ARRAY_COUNT(this->colliderElements); i++) {
         element = &this->collider.elements[i];
@@ -359,7 +360,8 @@ void EnDekubaba_SetupDecideLunge(EnDekubaba* this) {
 }
 
 void EnDekubaba_SetupPrepareLunge(EnDekubaba* this) {
-    this->timer = 8;
+    //ipi: Don't wait to lunge
+    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 1 : 8;
     this->skelAnime.playSpeed = 0.0f;
     this->actionFunc = EnDekubaba_PrepareLunge;
 }
@@ -378,9 +380,11 @@ void EnDekubaba_SetupPullBack(EnDekubaba* this) {
 }
 
 void EnDekubaba_SetupRecover(EnDekubaba* this) {
-    this->timer = 9;
+    //ipi: Continue pummeling the player
+    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 3 : 9;
     this->collider.base.acFlags |= AC_ON;
-    this->skelAnime.playSpeed = -1.0f;
+    //ipi: Play animation quicker also
+    this->skelAnime.playSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? -3.0f : -1.0f;
     this->actionFunc = EnDekubaba_Recover;
 }
 
@@ -480,7 +484,9 @@ void EnDekubaba_Wait(EnDekubaba* this, PlayState* play) {
     this->actor.world.pos.z = this->actor.home.pos.z;
     this->actor.world.pos.y = this->actor.home.pos.y + 14.0f * this->size;
 
-    if ((this->timer == 0) && (this->actor.xzDistToPlayer < 200.0f * this->size) &&
+    //ipi: Activate from further away
+    f32 growScalar = CVarGetInteger("gIpiCrazyMode", 0) ? 2.0f : 1.0f;
+    if ((this->timer == 0) && (this->actor.xzDistToPlayer < 200.0f * growScalar * this->size) &&
         (fabsf(this->actor.yDistToPlayer) < 30.0f * this->size)) {
         EnDekubaba_SetupGrow(this);
     }
@@ -497,11 +503,20 @@ void EnDekubaba_Grow(EnDekubaba* this, PlayState* play) {
         this->timer--;
     }
 
+    //ipi: Half animation time in crazy mode
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->timer != 0) {
+        this->timer--;
+    }
+
     SkelAnime_Update(&this->skelAnime);
 
     this->actor.scale.x = this->actor.scale.y = this->actor.scale.z =
         this->size * 0.01f * (0.5f + (15 - this->timer) * 0.5f / 15.0f);
     Math_ScaledStepToS(&this->actor.shape.rot.x, 0x1800, 0x800);
+
+    //ipi: big head mode?
+    if (CVarGetInteger("gIpiCrazyMode", 0))
+        this->actor.scale.x += 0.025f;
 
     headDistVertical = sinf(CLAMP_MAX((15 - this->timer) * (1.0f / 15), 0.7f) * M_PI) * 32.0f + 14.0f;
 
@@ -546,7 +561,8 @@ void EnDekubaba_Grow(EnDekubaba* this, PlayState* play) {
                              this->size * 5.0f, 1, HAHEN_OBJECT_DEFAULT, 10, NULL);
 
     if (this->timer == 0) {
-        if (Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos) < 240.0f * this->size) {
+        //ipi: Always lunge, regardless of distance
+        if (Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos) < 240.0f * this->size || CVarGetInteger("gIpiCrazyMode", 0)) {
             EnDekubaba_SetupPrepareLunge(this);
         } else {
             EnDekubaba_SetupRetract(this);
@@ -667,7 +683,8 @@ void EnDekubaba_DecideLunge(EnDekubaba* this, PlayState* play) {
 
     if (240.0f * this->size < Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos)) {
         EnDekubaba_SetupRetract(this);
-    } else if ((this->timer == 0) || (this->actor.xzDistToPlayer < 80.0f * this->size)) {
+    //ipi: Always lunge, regardless of distance
+    } else if ((this->timer == 0) || (this->actor.xzDistToPlayer < 80.0f * this->size) || CVarGetInteger("gIpiCrazyMode", 0)) {
         EnDekubaba_SetupPrepareLunge(this);
     }
 }
@@ -719,11 +736,31 @@ void EnDekubaba_Lunge(EnDekubaba* this, PlayState* play) {
             Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 0xF, 0x71C);
         }
 
+        //ipi: Always turn towards player
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 0xF, 0x171C);
+        }
+
         if (Animation_OnFrame(&this->skelAnime, 0.0f) || Animation_OnFrame(&this->skelAnime, 12.0f)) {
             if (this->actor.params == DEKUBABA_BIG) {
                 Audio_PlayActorSound2(&this->actor, NA_SE_EN_DEKU_MOUTH);
             } else {
                 Audio_PlayActorSound2(&this->actor, NA_SE_EN_DEKU_JR_MOUTH);
+            }
+
+            //ipi: Shoot deku nuts
+            if (CVarGetInteger("gIpiCrazyMode", 0))
+            {
+                Vec3f spawnPos;
+                spawnPos.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y) * 30.0f * this->size);
+                spawnPos.y = this->actor.world.pos.y + (4.0f * this->size);
+                spawnPos.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y) * 30.0f * this->size);
+                Actor* nutsBall = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NUTSBALL, spawnPos.x, spawnPos.y, spawnPos.z,
+                    this->actor.shape.rot.x, this->actor.shape.rot.y, this->actor.shape.rot.z, 0, false);
+                if (nutsBall != NULL) {
+                    nutsBall->velocity.x *= 2.0f;
+                    nutsBall->velocity.y *= 2.0f;
+                }
             }
         }
     }

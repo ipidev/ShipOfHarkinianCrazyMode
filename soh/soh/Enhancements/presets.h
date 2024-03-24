@@ -278,6 +278,7 @@ const std::vector<const char*> enhancementsCvars = {
     "gPermanentHeartLoss",
     "gRemoveExplosiveLimit",
     "gToggleStrength",
+    "gIpiCrazyMode",
 };
 
 const std::vector<const char*> cheatCvars = {

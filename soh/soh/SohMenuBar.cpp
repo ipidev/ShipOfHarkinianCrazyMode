@@ -979,6 +979,8 @@ void DrawEnhancementsMenu() {
                 UIWidgets::Tooltip("Cuccos will stay in place longer after putting them down, by a multiple of the value of the slider.");
                 UIWidgets::PaddedEnhancementSliderInt("Leever Spawn Rate: %d seconds", "##LeeverSpawnRate", "gEnhancements.LeeverSpawnRate", 0, 10, "", 0, true, true, false);
                 UIWidgets::Tooltip("The time between leever groups spawning.");
+                UIWidgets::PaddedEnhancementCheckbox("ipi's Crazy Mode", "gIpiCrazyMode", true, false);
+                UIWidgets::Tooltip("Shit's about to go down.");
 
                 ImGui::EndMenu();
             }
