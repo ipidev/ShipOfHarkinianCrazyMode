@@ -7,6 +7,9 @@
 #include "z_bg_relay_objects.h"
 #include "objects/object_relay_objects/object_relay_objects.h"
 
+//ipi: To explode
+#include "overlays/actors/ovl_En_Bom/z_en_bom.h"
+
 #define FLAGS ACTOR_FLAG_UPDATE_WHILE_CULLED
 
 typedef enum {
@@ -185,7 +188,28 @@ void func_808A939C(BgRelayObjects* this, PlayState* play) {
         Flags_SetEventChkInf(EVENTCHKINF_PLAYED_SONG_OF_STORMS_IN_WINDMILL);
     }
     if (Flags_GetEventChkInf(EVENTCHKINF_PLAYED_SONG_OF_STORMS_IN_WINDMILL)) {
-        Math_ScaledStepToS(&this->dyna.actor.world.rot.y, 0x400, 8);
+        //ipi: Obviously spin faster!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            Math_ScaledStepToS(&this->dyna.actor.world.rot.y, 0x3000, 24);
+
+            //And start exploding!
+            static u8 explodeCounter = 0;
+            if (this->dyna.actor.world.rot.y > 0xC00 && DECR(explodeCounter) == 0) {
+                explodeCounter = Rand_S16Offset(4, 8);
+                Vec3f spawnPos;
+                spawnPos.x = this->dyna.actor.world.pos.x + (Rand_Centered() * 180.0f);
+                spawnPos.y = this->dyna.actor.world.pos.y + (Rand_ZeroOne() * 100.0f);
+                spawnPos.z = this->dyna.actor.world.pos.z + (Rand_Centered() * 180.0f);
+                EnBom* bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, spawnPos.x,
+                        spawnPos.y, spawnPos.z, 0, 0, 0,
+                        BOMB_BODY, true);
+                if (bomb != NULL) {
+                    bomb->timer = 0;
+                }
+            }
+        } else {
+            Math_ScaledStepToS(&this->dyna.actor.world.rot.y, 0x400, 8);
+        }
     } else {
         Math_ScaledStepToS(&this->dyna.actor.world.rot.y, 0x80, 8);
     }
