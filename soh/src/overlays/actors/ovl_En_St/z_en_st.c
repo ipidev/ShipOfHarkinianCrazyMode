@@ -682,7 +682,17 @@ void EnSt_Bob(EnSt* this, PlayState* play) {
     if ((play->state.frames & 8) != 0) {
         ySpeedTarget *= -1.0f;
     }
-    Math_SmoothStepToF(&this->actor.velocity.y, ySpeedTarget, 0.4f, 1000.0f, 0.0f);
+    Math_SmoothStepToF(&this->actor.velocity.y, ySpeedTarget, 0.2f, 1000.0f, 0.0f);
+
+    //ipi: Move ominously towards the player
+    //I meant for this to be called when the skulltula was already down on the ground, but it
+    //plays while it's on the ceiling instead. But the effect is so funny I'm happy to keep it
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Player* player = GET_PLAYER(play);
+        Math_SmoothStepToF(&this->actor.world.pos.x, player->actor.world.pos.x, 0.1f, 100.0f, 1.0f);
+        Math_SmoothStepToF(&this->actor.world.pos.y, player->actor.world.pos.y, 0.1f, 100.0f, 1.0f);
+        Math_SmoothStepToF(&this->actor.world.pos.z, player->actor.world.pos.z, 0.1f, 100.0f, 1.0f);
+    }
 }
 
 s32 EnSt_IsCloseToPlayer(EnSt* this, PlayState* play) {
@@ -932,6 +942,12 @@ void EnSt_ReturnToCeiling(EnSt* this, PlayState* play) {
     } else {
         // accelerate based on the current animation frame.
         this->actor.velocity.y = 4.0f * animPctDone;
+
+        //ipi: Also move horizontally back to the ceiling position
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            Math_SmoothStepToF(&this->actor.world.pos.x, this->ceilingPos.x, 0.1f, 400.0f, 1.0f);
+            Math_SmoothStepToF(&this->actor.world.pos.z, this->ceilingPos.z, 0.1f, 400.0f, 1.0f);
+        }
     }
 }
 
