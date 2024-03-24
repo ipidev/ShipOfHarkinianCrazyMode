@@ -95,6 +95,9 @@ static AnimationInfo sAnimationInfo[] = {
     { &gDaruniaDancingEndAnim, 1.0f, 0.0f, -1.0f, ANIMMODE_ONCE, -6.0f },
 };
 
+//ipi: Looping dnace animation
+AnimationInfo sCrazyModeIdleAnim = { &gDaruniaDancingLoop1Anim, 3.0f, 0.0f, -1.0f, ANIMMODE_LOOP, -10.0f };
+
 // #region SOH [Enhancement] Only animations too fast need to be slowed down, otherwise not touched
 static AnimationInfo sAnimationInfoFix[] = {
     { NULL },
@@ -322,8 +325,14 @@ void EnDu_Init(Actor* thisx, PlayState* play) {
         Actor_Kill(&this->actor);
         return;
     }
-    Animation_ChangeByInfo(&this->skelAnime, sAnimationInfo, ENDU_ANIM_0);
-    Actor_SetScale(&this->actor, 0.01f);
+    //ipi: idk make him tiny and dancing
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Animation_ChangeByInfo(&this->skelAnime, &sCrazyModeIdleAnim, 0);
+        Actor_SetScale(&this->actor, 0.003f);
+    } else {
+        Animation_ChangeByInfo(&this->skelAnime, sAnimationInfo, ENDU_ANIM_0);
+        Actor_SetScale(&this->actor, 0.01f);
+    }
     this->actor.targetMode = 1;
     this->interactInfo.talkState = NPC_TALK_STATE_IDLE;
 
