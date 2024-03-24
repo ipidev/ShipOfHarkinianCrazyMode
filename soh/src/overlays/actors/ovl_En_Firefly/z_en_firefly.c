@@ -9,6 +9,9 @@
 #include "overlays/actors/ovl_Obj_Syokudai/z_obj_syokudai.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
+//ipi: For falling rocks
+#include "overlays/actors/ovl_En_Fire_Rock/z_en_fire_rock.h"
+
 #define FLAGS (ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_IGNORE_QUAKE | ACTOR_FLAG_ARROW_DRAGGABLE)
 
 void EnFirefly_Init(Actor* thisx, PlayState* play);
@@ -473,6 +476,10 @@ void EnFirefly_DiveAttack(EnFirefly* this, PlayState* play) {
             this->skelAnime.playSpeed = 0.0f;
             this->skelAnime.curFrame = 4.0f;
         }
+        //ipi: Accelerate in crazy mode
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            Math_StepToF(&this->actor.speedXZ, 10.0f, 1.0f);
+        }
         Math_SmoothStepToS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 2, 0xC00, 0x300);
         preyPos.x = player->actor.world.pos.x;
         preyPos.y = player->actor.world.pos.y + 20.0f;
@@ -714,6 +721,23 @@ void EnFirefly_Update(Actor* thisx, PlayState* play2) {
         this->actor.world.rot.y = this->actor.shape.rot.y;
         if (Animation_OnFrame(&this->skelAnime, 5.0f)) {
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_FFLY_FLY);
+
+            //ipi: Occasionally rocks onto the player
+            if (CVarGetInteger("gIpiCrazyMode", 0) && 0.25f >= Rand_ZeroOne()) {
+                //Ensure there's enough space below
+                Vec3f checkPos, resultPos;
+                checkPos.x = this->actor.world.pos.x;
+                checkPos.y = this->actor.world.pos.y-200;
+                checkPos.z = this->actor.world.pos.z;
+
+                CollisionPoly* poly;
+                s32 bgId;
+                if (!BgCheck_EntityLineTest1(&play->colCtx, &this->actor.world.pos, &checkPos, &resultPos, &poly,
+                    false, true, false, true, &bgId)) {
+                    Actor_Spawn(&play->actorCtx, play, ACTOR_EN_FIRE_ROCK, this->actor.world.pos.x,
+                        this->actor.world.pos.y-20, this->actor.world.pos.z, 0, 0, 0, FIRE_ROCK_SPAWNED_FALLING2, false);
+                }
+            }
         }
     }
 
