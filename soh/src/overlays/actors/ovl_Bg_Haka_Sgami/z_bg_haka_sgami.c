@@ -227,7 +227,9 @@ void BgHakaSgami_Spin(BgHakaSgami* this, PlayState* play) {
         this->timer--;
     }
 
-    this->actor.shape.rot.y += ((s16)(512.0f * sinf(this->timer * (M_PI / 16.0f))) + 0x400) >> 1;
+    //ipi: This one's too obvious
+    s16 spinSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 0x1600 : 0x400;
+    this->actor.shape.rot.y += ((s16)(512.0f * sinf(this->timer * (M_PI / 16.0f))) + spinSpeed) >> 1;
 
     if (this->timer == 0) {
         this->timer = SCYTHE_SPIN_TIME;
