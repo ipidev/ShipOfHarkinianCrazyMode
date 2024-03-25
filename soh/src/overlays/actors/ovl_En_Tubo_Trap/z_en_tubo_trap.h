@@ -14,6 +14,8 @@ typedef struct EnTuboTrap {
     /* 0x0150 */ f32 targetY;
     /* 0x0154 */ Vec3f originPos;
     /* 0x0160 */ ColliderCylinder collider;
+    //ipi: Extra flag to count the number of children
+                 u8 shotsLeft;
 } EnTuboTrap; // size = 0x01AC
 
 #endif

@@ -21,6 +21,9 @@ void EnTuboTrap_WaitForProximity(EnTuboTrap* this, PlayState* play);
 void EnTuboTrap_Levitate(EnTuboTrap* this, PlayState* play);
 void EnTuboTrap_Fly(EnTuboTrap* this, PlayState* play);
 
+//ipi: Extra behaviour to shoot babies!
+void EnTuboTrap_ShootBaby(EnTuboTrap* this, PlayState* play);
+
 static ColliderCylinderInit sCylinderInit = {
     {
         COLTYPE_NONE,
@@ -64,6 +67,9 @@ void EnTuboTrap_Init(Actor* thisx, PlayState* play) {
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
     Actor_SetScale(&this->actor, 0.1f);
     this->actionFunc = EnTuboTrap_WaitForProximity;
+
+    //ipi: Also use this counter as a timer to stay idle longer
+    this->shotsLeft = 0;
 }
 
 void EnTuboTrap_Destroy(Actor* thisx, PlayState* play) {
@@ -217,11 +223,20 @@ void EnTuboTrap_HandleImpact(EnTuboTrap* this, PlayState* play) {
     }
 
     if ((this->actor.bgCheckFlags & 8) || (this->actor.bgCheckFlags & 1)) {
-        EnTuboTrap_SpawnEffectsOnLand(this, play);
-        SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 40, NA_SE_EV_POT_BROKEN);
-        EnTuboTrap_DropCollectible(this, play);
-        Actor_Kill(&this->actor);
-        GameInteractor_ExecuteOnEnemyDefeat(&this->actor);
+        //ipi: If landing on the ground, return to idle instead of breaking
+        if (CVarGetInteger("gIpiCrazyMode", 0) && (this->actor.bgCheckFlags & 1)) {
+            SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 20, NA_SE_PL_PUT_DOWN_POT);
+            Actor_ChangeCategory(play, &play->actorCtx, &this->actor, ACTORCAT_PROP);
+            this->actor.speedXZ = 0.0f;
+            this->actor.gravity = 0.0f;
+            this->actionFunc = EnTuboTrap_WaitForProximity;
+        } else {
+            EnTuboTrap_SpawnEffectsOnLand(this, play);
+            SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 40, NA_SE_EV_POT_BROKEN);
+            EnTuboTrap_DropCollectible(this, play);
+            Actor_Kill(&this->actor);
+            GameInteractor_ExecuteOnEnemyDefeat(&this->actor);
+        }
         return;
     }
 }
@@ -234,6 +249,12 @@ void EnTuboTrap_WaitForProximity(EnTuboTrap* this, PlayState* play) {
         osSyncPrintf(VT_FGCOL(GREEN) "☆☆☆☆☆ わて     ☆☆☆☆☆ %f\n" VT_RST, this->actor.world.pos.y);   // "You"
         osSyncPrintf(VT_FGCOL(GREEN) "☆☆☆☆☆ おいどん ☆☆☆☆☆ %f\n" VT_RST, player->actor.world.pos.y); // "Me"
         osSyncPrintf("\n\n");
+    }
+
+    //ipi: If we've just been shot by a parent, wait a bit before shooting ourselves
+    if (CVarGetInteger("ipiCrazyMode", 0) && this->shotsLeft > 0) {
+        this->shotsLeft--;
+        return;
     }
 
     if (this->actor.xzDistToPlayer < 200.0f && this->actor.world.pos.y <= player->actor.world.pos.y) {
@@ -256,10 +277,22 @@ void EnTuboTrap_Levitate(EnTuboTrap* this, PlayState* play) {
     this->actor.shape.rot.y += 5000;
     Math_ApproachF(&this->actor.world.pos.y, this->targetY, 0.8f, 3.0f);
 
+    //ipi: Inflate as we hover up
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Math_StepToF(&this->actor.scale.x, 0.2f, 0.01f);
+        this->actor.scale.z = this->actor.scale.y = this->actor.scale.x;
+    }
+
     if (fabsf(this->actor.world.pos.y - this->targetY) < 10.0f) {
-        this->actor.speedXZ = 10.0f;
-        this->actor.world.rot.y = this->actor.yawTowardsPlayer;
-        this->actionFunc = EnTuboTrap_Fly;
+        //ipi: Shoot children instead of flying towards player
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->shotsLeft = 3;
+            this->actionFunc = EnTuboTrap_ShootBaby;
+        } else {
+            this->actor.speedXZ = 10.0f;
+            this->actor.world.rot.y = this->actor.yawTowardsPlayer;
+            this->actionFunc = EnTuboTrap_Fly;
+        }
     }
 }
 
@@ -273,6 +306,62 @@ void EnTuboTrap_Fly(EnTuboTrap* this, PlayState* play) {
     if (240.0f < sqrtf(SQ(dx) + SQ(dy) + SQ(dz))) {
         Math_ApproachF(&this->actor.gravity, -3.0f, 0.2f, 0.5f);
     }
+
+    this->actor.shape.rot.y += 5000;
+    EnTuboTrap_HandleImpact(this, play);
+}
+
+//ipi: Extra behaviour to shoot babies!
+void EnTuboTrap_ShootBaby(EnTuboTrap* this, PlayState* play) {
+    if (this->actor.scale.x <= 0.2f) {
+        if (this->shotsLeft > 0) {
+            //Decrement shots left and puff up briefly
+            this->shotsLeft--;
+            Actor_SetScale(&this->actor, 0.3f);
+
+            //Don't spawn too many pots!
+            u16 activePots = 0;
+            Actor* actor = play->actorCtx.actorLists[ACTORCAT_ENEMY].head;
+            while (actor != NULL) {
+                if (actor->id == ACTOR_EN_TUBO_TRAP) {
+                    activePots++;
+                }
+                actor = actor->next;
+            }
+            actor = play->actorCtx.actorLists[ACTORCAT_PROP].head;
+            while (actor != NULL) {
+                if (actor->id == ACTOR_EN_TUBO_TRAP) {
+                    activePots++;
+                }
+                actor = actor->next;
+            }
+
+            //Spawn only if there's not enough yet
+            if (activePots < 15) {
+                EnTuboTrap* baby = (EnTuboTrap*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_TUBO_TRAP, this->actor.world.pos.x,
+                    this->actor.world.pos.y, this->actor.world.pos.z, 0, this->actor.yawTowardsPlayer, 0, this->actor.params, false);
+                if (baby != NULL) {
+                    baby->actor.speedXZ = 10.0f;
+                    Math_Vec3f_Copy(&baby->originPos, &this->actor.world.pos);
+                    baby->shotsLeft = 15;   //Timer to keep a landed pot idle for longer
+                    baby->actionFunc = EnTuboTrap_Fly;
+                    SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 40, NA_SE_EN_NUTS_THROW);
+                }
+            }
+        } else {
+            //Destroy the pot
+            EnTuboTrap_SpawnEffectsOnLand(this, play);
+            SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 40, NA_SE_EV_POT_BROKEN);
+            EnTuboTrap_DropCollectible(this, play);
+            Actor_Kill(&this->actor);
+            GameInteractor_ExecuteOnEnemyDefeat(&this->actor);
+        }
+    } else {
+        Math_StepToF(&this->actor.scale.x, 0.2f, 0.015f);
+        this->actor.scale.z = this->actor.scale.y = this->actor.scale.x;
+    }
+
+    Audio_PlayActorSound2(&this->actor, NA_SE_EN_TUBOOCK_FLY - SFX_FLAG);
 
     this->actor.shape.rot.y += 5000;
     EnTuboTrap_HandleImpact(this, play);
