@@ -13,6 +13,9 @@
 #define COLLECTFLAG_GRAVEDIGGING_HEART_PIECE 0x19
 #define ITEMGETINFFLAG_GRAVEDIGGING_HEART_PIECE 0x1000
 
+//ipi: Faster!
+#define CRAZY_MODE_DAMPE_SPEED_MULT 8.0f
+
 bool heartPieceSpawned;
 
 void EnTk_Init(Actor* thisx, PlayState* play);
@@ -24,6 +27,9 @@ s32 EnTk_CheckNextSpot(EnTk* this, PlayState* play);
 void EnTk_Rest(EnTk* this, PlayState* play);
 void EnTk_Walk(EnTk* this, PlayState* play);
 void EnTk_Dig(EnTk* this, PlayState* play);
+
+//ipi: Special digging behaviour
+void EnTk_CrazyModeDig(EnTk* this, PlayState* play);
 
 const ActorInit En_Tk_InitVars = {
     ACTOR_EN_TK,
@@ -172,6 +178,10 @@ void EnTk_RestAnim(EnTk* this, PlayState* play) {
 
     Animation_Change(&this->skelAnime, anim, 1.0f, 0.0f, Animation_GetLastFrame(&gDampeRestAnim), ANIMMODE_LOOP,
                      -10.0f);
+    //ipi: Faster!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed *= CRAZY_MODE_DAMPE_SPEED_MULT;
+    }
 
     this->actionCountdown = Rand_S16Offset(60, 60);
     this->actor.speedXZ = 0.0f;
@@ -182,6 +192,10 @@ void EnTk_WalkAnim(EnTk* this, PlayState* play) {
 
     Animation_Change(&this->skelAnime, anim, 1.0f, 0.0f, Animation_GetLastFrame(&gDampeRestAnim), ANIMMODE_LOOP,
                      -10.0f);
+    //ipi: Faster!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed *= CRAZY_MODE_DAMPE_SPEED_MULT;
+    }
 
     this->actionCountdown = Rand_S16Offset(240, 240);
 }
@@ -190,6 +204,10 @@ void EnTk_DigAnim(EnTk* this, PlayState* play) {
     AnimationHeader* anim = &gDampeDigAnim;
 
     Animation_Change(&this->skelAnime, anim, 1.0f, 0.0f, Animation_GetLastFrame(&gDampeDigAnim), ANIMMODE_LOOP, -10.0f);
+    //ipi: Faster!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed *= CRAZY_MODE_DAMPE_SPEED_MULT;
+    }
 
     if (EnTk_CheckNextSpot(this, play) >= 0) {
         this->validDigHere = 1;
@@ -323,9 +341,15 @@ s32 EnTk_Orient(EnTk* this, PlayState* play) {
     dz = point->z - this->actor.world.pos.z;
 
     Math_SmoothStepToS(&this->actor.shape.rot.y, Math_FAtan2F(dx, dz) * (0x8000 / M_PI), 10, 1000, 1);
+    //ipi: Turn faster to account for higher speed
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Math_SmoothStepToS(&this->actor.shape.rot.y, Math_FAtan2F(dx, dz) * (0x8000 / M_PI), 10, 4000, 1);
+    }
     this->actor.world.rot = this->actor.shape.rot;
 
-    if (SQ(dx) + SQ(dz) < 10.0f) {
+    //ipi: Larger (squared) distance when faster to account for greater speed
+    f32 distance = CVarGetInteger("gIpiCrazyMode", 0) ? 100.0f : 10.0f;
+    if (SQ(dx) + SQ(dz) < distance) {
         this->currentWaypoint++;
         if (this->currentWaypoint >= path->count) {
             this->currentWaypoint = 0;
@@ -520,6 +544,10 @@ void EnTk_Init(Actor* thisx, PlayState* play) {
     this->currentSpot = NULL;
     this->actionFunc = EnTk_Rest;
     heartPieceSpawned = false;
+
+    //ipi: Use these unused byte to store dig progress
+    this->unk_220[0] = 0;   //Dig counter
+    this->unk_220[1] = 0;   //Dig loop check
 }
 
 void EnTk_Destroy(Actor* thisx, PlayState* play) {
@@ -542,7 +570,8 @@ void EnTk_Rest(EnTk* this, PlayState* play) {
         if (this->interactInfo.talkState == NPC_TALK_STATE_ACTION) {
             EnTk_DigAnim(this, play);
             this->interactInfo.talkState = NPC_TALK_STATE_IDLE;
-            this->actionFunc = EnTk_Dig;
+            //ipi: Use our special dig function instead
+            this->actionFunc = CVarGetInteger("gIpiCrazyMode", 0) ? EnTk_CrazyModeDig : EnTk_Dig;
             return;
         }
 
@@ -580,9 +609,14 @@ void EnTk_Walk(EnTk* this, PlayState* play) {
     if (this->interactInfo.talkState == NPC_TALK_STATE_ACTION) {
         EnTk_DigAnim(this, play);
         this->interactInfo.talkState = NPC_TALK_STATE_IDLE;
-        this->actionFunc = EnTk_Dig;
+        //ipi: Use our special dig function instead
+        this->actionFunc = CVarGetInteger("gIpiCrazyMode", 0) ? EnTk_CrazyModeDig : EnTk_Dig;
     } else {
         this->actor.speedXZ = EnTk_Step(this, play);
+        //ipi: Faster!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->actor.speedXZ *= CRAZY_MODE_DAMPE_SPEED_MULT;
+        }
         EnTk_Orient(this, play);
         Math_SmoothStepToS(&this->headRot, 0, 6, 1000, 1);
         EnTk_CheckCurrentSpot(this);
@@ -697,6 +731,105 @@ void EnTk_Dig(EnTk* this, PlayState* play) {
     }
 }
 
+//ipi: Special digging behaviour
+void EnTk_CrazyModeDig(EnTk* this, PlayState* play) {
+    Vec3f rewardOrigin;
+    Vec3f rewardPos;
+    s32 rewardParams[] = {
+        ITEM00_RUPEE_GREEN, ITEM00_RUPEE_BLUE, ITEM00_RUPEE_RED, ITEM00_RUPEE_PURPLE, ITEM00_HEART_PIECE,
+    };
+    static u8 timesToDig = 10;
+
+    EnTk_DigEff(this);
+
+    if (this->skelAnime.curFrame >= 32.0f) {
+        if (!this->unk_220[1]) {
+            this->unk_220[1] = true;
+            this->unk_220[0]++;
+
+            //Keep digging
+            if (this->unk_220[0] <= timesToDig) {
+                Audio_PlayActorSound2(&this->actor, NA_SE_EV_DIG_UP);
+            } else if (this->validDigHere == 1 || IS_RANDO || CVarGetInteger("gDampeWin", 0)) {
+                //Give the reward (from original dig function)
+                rewardOrigin.x = 0.0f;
+                rewardOrigin.y = 50.0f;
+                rewardOrigin.z = -40.0f;
+
+                Matrix_RotateY(this->actor.shape.rot.y, MTXMODE_NEW);
+                Matrix_MultVec3f(&rewardOrigin, &rewardPos);
+
+                rewardPos.x += this->actor.world.pos.x;
+                rewardPos.y += this->actor.world.pos.y;
+                rewardPos.z += this->actor.world.pos.z;
+
+                this->currentReward = EnTk_ChooseReward(this);
+
+                if (this->currentReward == 3) {
+                    if (IS_RANDO || CVarGetInteger("gDampeWin", 0)) {
+                        /*
+                        * Upgrade the purple rupee reward to the heart piece if this
+                        * is the first grand prize dig.
+                        */
+                        if (!Flags_GetItemGetInf(ITEMGETINF_1C) && !(IS_RANDO || CVarGetInteger("gDampeWin", 0))) {
+                            Flags_SetItemGetInf(ITEMGETINF_1C);
+                            this->currentReward = 4;
+                        } else if ((IS_RANDO || CVarGetInteger("gDampeWin", 0)) && !Flags_GetCollectible(gPlayState, COLLECTFLAG_GRAVEDIGGING_HEART_PIECE) && this->heartPieceSpawned == 0) {
+                            this->currentReward = 4;
+                        }
+                    }
+                    /*
+                    * Upgrade the purple rupee reward to the heart piece if this
+                    * is the first grand prize dig.
+                    */
+                    // If vanilla itemGetInf flag is not set, it's impossible for the new flag to be set, so return true.
+                    // Otherwise if the gGravediggingTourFix is enabled and the new flag hasn't been set, return true.
+                    // If true, spawn the heart piece and set the vanilla itemGetInf flag and new temp clear flag.
+                    if (!heartPieceSpawned &&
+                        (!(gSaveContext.itemGetInf[1] & ITEMGETINFFLAG_GRAVEDIGGING_HEART_PIECE) ||
+                        CVarGetInteger("gGravediggingTourFix", 0) &&
+                            !Flags_GetCollectible(play, COLLECTFLAG_GRAVEDIGGING_HEART_PIECE))) {
+                        this->currentReward = 4;
+                        gSaveContext.itemGetInf[1] |= ITEMGETINFFLAG_GRAVEDIGGING_HEART_PIECE;
+                        heartPieceSpawned = true;
+                    }
+                }
+
+                if (IS_RANDO && this->currentReward == 4) {
+                    Actor_Spawn(&play->actorCtx, play, ACTOR_EN_ITEM00, rewardPos.x, rewardPos.y, rewardPos.z, 0, 0, 0, 0x1906, true);
+                    this->heartPieceSpawned = 1;
+                } else {
+                    EnItem00* reward = Item_DropCollectible(play, &rewardPos, rewardParams[this->currentReward]);
+                    if (this->currentReward == 4) {
+                        reward->collectibleFlag = COLLECTFLAG_GRAVEDIGGING_HEART_PIECE;
+                    }
+                }
+
+                if (!(IS_RANDO || CVarGetInteger("gDampeWin", 0)) && this->validDigHere == 0) {
+                    /* Bad dig spot */
+                    Audio_PlayActorSound2(&this->actor, NA_SE_SY_ERROR);
+                } else if (this->currentReward == 4) {
+                    /* Heart piece */
+                    Audio_PlaySoundGeneral(NA_SE_SY_CORRECT_CHIME, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+                } else {
+                    /* Rupee */
+                    Audio_PlayActorSound2(&this->actor, NA_SE_SY_TRE_BOX_APPEAR);
+                }
+            }
+
+            //Always descend while digging
+            this->actor.world.pos.y -= 5.0f;
+        }
+    } else {
+        this->unk_220[1] = false;
+
+        if (this->unk_220[0] > timesToDig) {
+            Message_CloseTextbox(play);
+            Actor_Kill(&this->actor);
+        }
+    }
+}
+
 void EnTk_Update(Actor* thisx, PlayState* play) {
     EnTk* this = (EnTk*)thisx;
     s32 pad;
@@ -706,9 +839,12 @@ void EnTk_Update(Actor* thisx, PlayState* play) {
 
     SkelAnime_Update(&this->skelAnime);
 
-    Actor_MoveForward(&this->actor);
+    //ipi: While digging we allow ourselves to sink underground
+    if (this->actionFunc != EnTk_CrazyModeDig) {
+        Actor_MoveForward(&this->actor);
 
-    Actor_UpdateBgCheckInfo(play, &this->actor, 40.0f, 10.0f, 0.0f, 5);
+        Actor_UpdateBgCheckInfo(play, &this->actor, 40.0f, 10.0f, 0.0f, 5);
+    }
 
     this->actionFunc(this, play);
 
