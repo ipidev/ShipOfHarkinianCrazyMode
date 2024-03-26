@@ -38,6 +38,9 @@ const ActorInit En_Takara_Man_InitVars = {
 
 u8 sTakaraIsInitialized = false;
 
+//ipi: For randomly scaling
+static f32 sCrazyModeTakaraX, sCrazyModeTakaraY, sCrazyModeTakaraZ;
+
 void EnTakaraMan_Reset(Actor* thisx, PlayState* play) {
     sTakaraIsInitialized = false;
 }
@@ -71,6 +74,11 @@ void EnTakaraMan_Init(Actor* thisx, PlayState* play) {
     thisx->world.rot.y = thisx->shape.rot.y = -0x4E20;
     thisx->targetMode = 1;
     this->actionFunc = func_80B176E0;
+
+    //ipi: Initialize scaling values
+    sCrazyModeTakaraX = 0.0f;
+    sCrazyModeTakaraY = 0.0f;
+    sCrazyModeTakaraZ = 0.0f;
 }
 
 void EnTakaraMan_Destroy(Actor* thisx, PlayState* play) {
@@ -135,6 +143,16 @@ void func_80B1778C(EnTakaraMan* this, PlayState* play) {
                 func_8002F2CC(&this->actor, play, 100.0f);
             }
         }
+    }
+
+    //ipi: idk just scale weirdly
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        sCrazyModeTakaraX += 0.125f;
+        sCrazyModeTakaraY += 0.1847f;
+        sCrazyModeTakaraZ += 0.0817f;
+        this->actor.scale.x = 0.017f + (Math_SinF(sCrazyModeTakaraX) * 0.01f);
+        this->actor.scale.y = 0.017f + (Math_SinF(sCrazyModeTakaraY) * 0.01f);
+        this->actor.scale.z = 0.017f + (Math_SinF(sCrazyModeTakaraZ) * 0.01f);
     }
 }
 
