@@ -15,6 +15,8 @@ typedef struct EnTg {
     /* 0x0194 */ ColliderCylinder collider;
     /* 0x01E0 */ NpcInteractInfo interactInfo;
     /* 0x0208 */ u8 nextDialogue;
+    //ipi: Increases while the player is nearby
+                 u8 spinCounter;
 } EnTg; // size = 0x020C
 
 #endif

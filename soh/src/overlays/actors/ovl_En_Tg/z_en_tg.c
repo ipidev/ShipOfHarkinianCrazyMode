@@ -7,7 +7,11 @@
 #include "z_en_tg.h"
 #include "objects/object_mu/object_mu.h"
 
-#define FLAGS (ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_FRIENDLY)
+//ipi: To explode
+#include "overlays/actors/ovl_En_Bom/z_en_bom.h"
+
+//ipi: Update while offscreen
+#define FLAGS (ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_FRIENDLY | ACTOR_FLAG_UPDATE_WHILE_CULLED)
 
 void EnTg_Init(Actor* thisx, PlayState* play);
 void EnTg_Destroy(Actor* thisx, PlayState* play);
@@ -15,6 +19,10 @@ void EnTg_Update(Actor* thisx, PlayState* play);
 void EnTg_Draw(Actor* thisx, PlayState* play);
 
 void EnTg_SpinIfNotTalking(EnTg* this, PlayState* play);
+
+//ipi: Extra behaviour for launching into the air
+void EnTg_BlastOff(EnTg* this, PlayState* play);
+void EnTg_CrashDown(EnTg* this, PlayState* play);
 
 static ColliderCylinderInit sCylinderInit = {
     {
@@ -30,6 +38,27 @@ static ColliderCylinderInit sCylinderInit = {
         { 0x00000000, 0x00, 0x00 },
         { 0x00000000, 0x00, 0x00 },
         TOUCH_NONE,
+        BUMP_NONE,
+        OCELEM_ON,
+    },
+    { 20, 64, 0, { 0, 0, 0 } },
+};
+
+//ipi: Used when crashing down
+static ColliderCylinderInit sCylinderInit2 = {
+    {
+        COLTYPE_NONE,
+        AT_ON | AT_TYPE_ENEMY,
+        AC_NONE,
+        OC1_ON | OC1_TYPE_ALL,
+        OC2_TYPE_2,
+        COLSHAPE_CYLINDER,
+    },
+    {
+        ELEMTYPE_UNK0,
+        { 0x20000000, 0x00, 0x08 },
+        { 0xFFCFFFFF, 0x00, 0x00 },
+        TOUCH_ON | TOUCH_SFX_NONE,
         BUMP_NONE,
         OCELEM_ON,
     },
@@ -123,6 +152,7 @@ void EnTg_Init(Actor* thisx, PlayState* play) {
     Actor_SetScale(&this->actor, 0.01f);
     this->nextDialogue = play->state.frames % 2;
     this->actionFunc = EnTg_SpinIfNotTalking;
+    this->spinCounter = 0;
 }
 
 void EnTg_Destroy(Actor* thisx, PlayState* play) {
@@ -135,6 +165,88 @@ void EnTg_Destroy(Actor* thisx, PlayState* play) {
 void EnTg_SpinIfNotTalking(EnTg* this, PlayState* play) {
     if (!this->interactInfo.talkState) {
         this->actor.shape.rot.y += 0x800;
+
+        //ipi: Start spinning faster while the player is nearby
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            if (this->actor.xzDistToPlayer <= 150.0f) {
+                this->spinCounter++;
+            } else if (this->spinCounter > 0) {
+                this->spinCounter--;
+            }
+
+            this->actor.shape.rot.y += 0x100 * this->spinCounter;
+
+            //Take off once spinning fast enough
+            if (this->spinCounter >= 30) {
+                this->spinCounter = 0;
+                this->actor.targetMode = 0;
+                this->actor.sfx = NA_SE_EV_FIRE_PILLAR;
+                this->actionFunc = EnTg_BlastOff;
+            }
+        }
+    }
+}
+
+//ipi: Extra behaviour for launching into the air
+void EnTg_BlastOff(EnTg* this, PlayState* play) {
+    this->actor.shape.rot.y += 0x2600;
+
+    //Create smoke trail
+    this->spinCounter++;
+    if (this->spinCounter & 1) {
+        Vec3f velocity;
+        VEC_SET(velocity, 0.0f, 0.0f, 0.0f);
+        EffectSsBomb2_SpawnLayered(play, &this->actor.world, &velocity, &velocity, 80, 10);
+    }
+
+    //Accelerate upwards
+    Math_StepToF(&this->actor.velocity.y, 5.0f, 0.25f);
+    Actor_MoveForward(&this->actor);
+
+    //Once high enough, crash onto the player
+    if (this->actor.world.pos.y - this->actor.home.pos.y >= 400.0f) {
+        Player* player = GET_PLAYER(play);
+        this->actor.world.pos.x = player->actor.world.pos.x;
+        this->actor.world.pos.z = player->actor.world.pos.z;
+
+        //Turn upside down
+        this->actor.shape.rot.x = 0x8000;
+        this->actor.shape.yOffset = 6000.0f;
+
+        //Enable collisions with the player
+        Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit2);
+
+        //Whee!
+        this->actor.velocity.y = -15.0f;
+        this->actor.sfx = NA_SE_EV_OBJECT_FALL;
+        this->actionFunc = EnTg_CrashDown;
+    }
+}
+
+//ipi: Extra behaviour for launching into the air
+void EnTg_CrashDown(EnTg* this, PlayState* play) {
+    this->actor.shape.rot.y += 0x3000;
+    Actor_MoveForward(&this->actor);
+
+    //Damage the player if we hit them - DOESN'T WORK!!! WHY!!
+    if (this->collider.base.atFlags & AT_HIT) {
+        this->collider.base.atFlags &= ~AT_HIT;
+        play->damagePlayer(play, -8);
+        Player* player = GET_PLAYER(play);
+        Audio_PlayActorSound2(&player->actor, NA_SE_PL_BODY_HIT);
+        //Knockback?
+        func_8002F71C(play, &this->actor, 4.0f, this->actor.yawTowardsPlayer, 6.0f);
+    }
+
+    //Explode once we hit the ground
+    if (this->actor.world.pos.y <= this->actor.floorHeight) {
+        EnBom* bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->actor.world.pos.x,
+            this->actor.floorHeight + 10.0f, this->actor.world.pos.z, 0, 0, 0, BOMB_BODY, false);
+        if (bomb != NULL) {
+            bomb->timer = 0;
+        }
+
+        Actor_Kill(&this->actor);
     }
 }
 
@@ -149,11 +261,16 @@ void EnTg_Update(Actor* thisx, PlayState* play) {
     sp2C.z = (s16)this->actor.world.pos.z + 3;
     this->collider.dim.pos = sp2C;
     CollisionCheck_SetOC(play, &play->colChkCtx, &this->collider.base);
+    //ipi: Enable AT collision
+    CollisionCheck_SetAT(play, &play->colChkCtx, &this->collider.base);
     SkelAnime_Update(&this->skelAnime);
     Actor_UpdateBgCheckInfo(play, &this->actor, 0.0f, 0.0f, 0.0f, 4);
     this->actionFunc(this, play);
-    temp = this->collider.dim.radius + 30.0f;
-    Npc_UpdateTalking(play, &this->actor, &this->interactInfo.talkState, temp, EnTg_GetTextId, EnTg_UpdateTalkState);
+    //ipi: Ensure talking can only occur while not blasting off
+    if (this->actionFunc == EnTg_SpinIfNotTalking) {
+        temp = this->collider.dim.radius + 30.0f;
+        Npc_UpdateTalking(play, &this->actor, &this->interactInfo.talkState, temp, EnTg_GetTextId, EnTg_UpdateTalkState);
+    }
 }
 
 s32 EnTg_OverrideLimbDraw(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos, Vec3s* rot, void* thisx) {
