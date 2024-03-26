@@ -190,7 +190,8 @@ void EnTite_Init(Actor* thisx, PlayState* play) {
     this->bodyBreak.val = BODYBREAK_STATUS_FINISHED;
     thisx->focus.pos = thisx->world.pos;
     thisx->focus.pos.y += 20.0f;
-    thisx->colChkInfo.health = 2;
+    //ipi: More durable, because why not
+    thisx->colChkInfo.health = CVarGetInteger("gIpiCrazyMode", 0) ? 4 : 2;
     thisx->colChkInfo.mass = MASS_HEAVY;
     Collider_InitJntSph(play, &this->collider);
     Collider_SetJntSph(play, &this->collider, thisx, &sJntSphInit, &this->colliderItem);
@@ -225,7 +226,8 @@ void EnTite_Destroy(Actor* thisx, PlayState* play) {
 void EnTite_SetupIdle(EnTite* this) {
     Animation_MorphToLoop(&this->skelAnime, &object_tite_Anim_0012E4, 4.0f);
     this->action = TEKTITE_IDLE;
-    this->vIdleTimer = Rand_S16Offset(15, 30);
+    //ipi: Don't idle in crazy mode
+    this->vIdleTimer = CVarGetInteger("gIpiCrazyMode", 0) ? 0 : Rand_S16Offset(15, 30);
     this->actor.speedXZ = 0.0f;
     EnTite_SetupAction(this, EnTite_Idle);
 }
@@ -241,7 +243,8 @@ void EnTite_Idle(EnTite* this, PlayState* play) {
             Math_SmoothStepToF(&this->actor.world.pos.y, this->actor.world.pos.y + this->actor.yDistToWater, 1.0f, 2.0f,
                                0.0f);
         } else {
-            this->actor.gravity = -1.0f;
+            //ipi: Higher gravity
+            this->actor.gravity = CVarGetInteger("gIpiCrazyMode", 0) ? -3.0f : -1.0f;
         }
     }
     if ((this->actor.bgCheckFlags & 3) && (this->actor.velocity.y <= 0.0f)) {
@@ -285,9 +288,16 @@ void EnTite_Attack(EnTite* this, PlayState* play) {
                     this->actor.world.pos.y += this->actor.yDistToWater;
                     Audio_PlayActorSound2(&this->actor, NA_SE_EN_TEKU_JUMP_WATER);
                 }
-                this->actor.velocity.y = 8.0f;
-                this->actor.gravity = -1.0f;
-                this->actor.speedXZ = 4.0f;
+                //ipi: Faster!
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    this->actor.velocity.y = 13.0f;
+                    this->actor.gravity = -3.0f;
+                    this->actor.speedXZ = 16.0f;
+                } else {
+                    this->actor.velocity.y = 8.0f;
+                    this->actor.gravity = -1.0f;
+                    this->actor.speedXZ = 4.0f;
+                }
                 break;
             case TEKTITE_MID_LUNGE:
                 // Continue trajectory until tektite has negative velocity and has landed on ground/water surface
@@ -345,6 +355,8 @@ void EnTite_Attack(EnTite* this, PlayState* play) {
         }
     }
 
+    //ipi: Used in TEKTITE_LANDED
+    s16 turnSpeed;
     switch (this->vAttackState) {
         case TEKTITE_BEGIN_LUNGE:
             // Slightly turn to player and switch to turning/idling action if the player is too far
@@ -385,7 +397,9 @@ void EnTite_Attack(EnTite* this, PlayState* play) {
             break;
         case TEKTITE_LANDED:
             // Slightly turn to player
-            Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 1500, 0);
+            //ipi: Turn faster, obviously
+            turnSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 4000 : 1500;
+            Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, turnSpeed, 0);
             break;
         case TEKTITE_SUBMERGED:
             // Float up to water surface
@@ -452,12 +466,15 @@ void EnTite_TurnTowardPlayer(EnTite* this, PlayState* play) {
         this->actor.world.pos.y += this->actor.yDistToWater;
     }
     angleToPlayer = Actor_WorldYawTowardActor(&this->actor, &GET_PLAYER(play)->actor) - this->actor.world.rot.y;
+
+    //ipi: Faster!
+    s16 turnSpeedScalar = CVarGetInteger("gIpiCrazyMode", 0) ? 10 : 2;
     if (angleToPlayer > 0) {
         turnVelocity = (angleToPlayer / 42.0f) + 10.0f;
-        this->actor.world.rot.y += (turnVelocity * 2);
+        this->actor.world.rot.y += (turnVelocity * turnSpeedScalar);
     } else {
         turnVelocity = (angleToPlayer / 42.0f) - 10.0f;
-        this->actor.world.rot.y += (turnVelocity * 2);
+        this->actor.world.rot.y += (turnVelocity * turnSpeedScalar);
     }
     if (angleToPlayer > 0) {
         this->skelAnime.playSpeed = turnVelocity * 0.01f;
@@ -493,9 +510,16 @@ void EnTite_TurnTowardPlayer(EnTite* this, PlayState* play) {
 void EnTite_SetupMoveTowardPlayer(EnTite* this) {
     Animation_PlayLoop(&this->skelAnime, &object_tite_Anim_000C70);
     this->action = TEKTITE_MOVE_TOWARD_PLAYER;
-    this->actor.velocity.y = 10.0f;
-    this->actor.gravity = -1.0f;
-    this->actor.speedXZ = 4.0f;
+    //ipi: Faster!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->actor.velocity.y = 14.0f;
+        this->actor.speedXZ = 8.0f;
+        this->actor.gravity = -3.0f;
+    } else {
+        this->actor.velocity.y = 10.0f;
+        this->actor.speedXZ = 4.0f;
+        this->actor.gravity = -1.0f;
+    }
     this->vQueuedJumps = Rand_S16Offset(1, 3);
     if ((this->actor.params == TEKTITE_BLUE) && (this->actor.bgCheckFlags & 0x20)) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_TEKU_JUMP_WATER);
@@ -568,10 +592,18 @@ void EnTite_MoveTowardPlayer(EnTite* this, PlayState* play) {
             if (this->vQueuedJumps <= 0) {
                 EnTite_SetupTurnTowardPlayer(this);
             } else {
-                this->actor.velocity.y = 10.0f;
-                this->actor.speedXZ = 4.0f;
-                this->actor.flags |= ACTOR_FLAG_PLAY_HIT_SFX;
-                this->actor.gravity = -1.0f;
+                //ipi: Faster!
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    this->actor.velocity.y = 14.0f;
+                    this->actor.speedXZ = 8.0f;
+                    this->actor.flags |= ACTOR_FLAG_PLAY_HIT_SFX;
+                    this->actor.gravity = -3.0f;
+                } else {
+                    this->actor.velocity.y = 10.0f;
+                    this->actor.speedXZ = 4.0f;
+                    this->actor.flags |= ACTOR_FLAG_PLAY_HIT_SFX;
+                    this->actor.gravity = -1.0f;
+                }
                 if ((this->actor.params == TEKTITE_BLUE) && (this->actor.bgCheckFlags & 0x20)) {
                     Audio_PlayActorSound2(&this->actor, NA_SE_EN_TEKU_JUMP_WATER);
                 } else {
@@ -579,10 +611,18 @@ void EnTite_MoveTowardPlayer(EnTite* this, PlayState* play) {
                 }
             }
         } else {
-            this->actor.velocity.y = 10.0f;
-            this->actor.speedXZ = 4.0f;
-            this->actor.flags |= ACTOR_FLAG_PLAY_HIT_SFX;
-            this->actor.gravity = -1.0f;
+            //ipi: Faster!
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                this->actor.velocity.y = 14.0f;
+                this->actor.speedXZ = 8.0f;
+                this->actor.flags |= ACTOR_FLAG_PLAY_HIT_SFX;
+                this->actor.gravity = -3.0f;
+            } else {
+                this->actor.velocity.y = 10.0f;
+                this->actor.speedXZ = 4.0f;
+                this->actor.flags |= ACTOR_FLAG_PLAY_HIT_SFX;
+                this->actor.gravity = -1.0f;
+            }
             if ((this->actor.params == TEKTITE_BLUE) && (this->actor.bgCheckFlags & 0x20)) {
                 Audio_PlayActorSound2(&this->actor, NA_SE_EN_TEKU_JUMP_WATER);
             } else {
@@ -610,7 +650,8 @@ void EnTite_SetupRecoil(EnTite* this) {
     Animation_MorphToLoop(&this->skelAnime, &object_tite_Anim_0012E4, 4.0f);
     this->actor.speedXZ = -6.0f;
     this->actor.world.rot.y = this->actor.yawTowardsPlayer;
-    this->actor.gravity = -1.0f;
+    //ipi: Higher gravity
+    this->actor.gravity = CVarGetInteger("gIpiCrazyMode", 0) ? -3.0f : -1.0f;
     EnTite_SetupAction(this, EnTite_Recoil);
 }
 
