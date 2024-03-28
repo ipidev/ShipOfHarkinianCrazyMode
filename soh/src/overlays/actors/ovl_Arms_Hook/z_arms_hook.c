@@ -85,10 +85,14 @@ void ArmsHook_Wait(ArmsHook* this, PlayState* play) {
     if (this->actor.parent == NULL) {
         Player* player = GET_PLAYER(play);
         // get correct timer length for hookshot or longshot
-        s32 length = ((player->heldItemAction == PLAYER_IA_HOOKSHOT) ? 13 : 26) * CVarGetFloat("gCheatHookshotReachMultiplier", 1.0f);
+        //ipi: Longer longshot!
+        s32 longshotLength = CVarGetInteger("gIpiCrazyMode", 0) ? 26 * 8 : 26;
+        s32 length = ((player->heldItemAction == PLAYER_IA_HOOKSHOT) ? 13 : longshotLength) * CVarGetFloat("gCheatHookshotReachMultiplier", 1.0f);
 
         ArmsHook_SetupAction(this, ArmsHook_Shoot);
-        func_8002D9A4(&this->actor, 20.0f);
+        //ipi: Faster longshot!
+        f32 speed = CVarGetInteger("gIpiCrazyMode", 0) && player->heldItemAction == PLAYER_IA_LONGSHOT ? 40.0f : 20.0f;
+        func_8002D9A4(&this->actor, speed);
         this->actor.parent = &GET_PLAYER(play)->actor;
         this->timer = length;
     }
