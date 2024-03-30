@@ -312,6 +312,12 @@ s32 EnDs_OverrideLimbDraw(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* po
         rot->x += this->unk_1D8.y;
         rot->z += this->unk_1D8.x;
     }
+    //ipi: Scale the relative limb positions, likely to look very weird!
+    if (CVarGetInteger("gIpiCrazyMode", 0) && limbIndex >= 4) {
+        f32 sinOffset = (0.75f * Math_SinS(play->gameplayFrames * 0x800)) + 1.25f;
+        pos->x += 200.f * sinOffset;
+        Math_Vec3f_Scale(pos, sinOffset);
+    }
     return false;
 }
 
