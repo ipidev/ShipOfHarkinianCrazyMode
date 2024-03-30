@@ -35,6 +35,9 @@
 #include <stdlib.h>
 #include <assert.h>
 
+//ipi: Hover boots last longer in crazy mode
+#define HOVER_BOOTS_DURATION (CVarGetInteger("gIpiCrazyMode", 0) ? 45 : 19)
+
 // Some player animations are played at this reduced speed, for reasons yet unclear.
 // This is called "adjusted" for now.
 #define PLAYER_ANIM_ADJUSTED_SPEED (2.0f / 3.0f)
@@ -7551,6 +7554,10 @@ void func_8084029C(Player* this, f32 arg1) {
         !(this->actor.bgCheckFlags & 1) &&
         (this->hoverBootsTimer != 0 || (CVarGetInteger("gIvanCoopModeEnabled", 0) && this->ivanFloating))) {
         func_8002F8F0(&this->actor, NA_SE_PL_HOBBERBOOTS_LV - SFX_FLAG);
+        //ipi: Modify pitch of hover boots
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->actor.sfxFreqScale = this->hoverBootsTimer < 20 ? ((20 - this->hoverBootsTimer) * 0.05f) + 1.0f : 1.0f;
+        }
     } else if (func_8084021C(this->unk_868, arg1, 29.0f, 10.0f) || func_8084021C(this->unk_868, arg1, 29.0f, 24.0f)) {
         func_808327F8(this, this->linearVelocity);
         if (this->linearVelocity > 4.0f) {
@@ -10479,7 +10486,7 @@ void func_808473D4(PlayState* play, Player* this) {
  *
  * @return true if not on the ground, false otherwise. Note this is independent of the Hover Boots state.
  */
-s32 Player_UpdateHoverBoots(Player* this) {
+s32 Player_UpdateHoverBoots(PlayState* play, Player* this) {
     s32 cond;
 
     if ((this->currentBoots == PLAYER_BOOTS_HOVER ||
@@ -10500,13 +10507,32 @@ s32 Player_UpdateHoverBoots(Player* this) {
 
     if (this->actor.bgCheckFlags & 1) {
         if (!cond) {
-            this->hoverBootsTimer = 19;
+            this->hoverBootsTimer = HOVER_BOOTS_DURATION;
         }
         return 0;
     }
 
     sFloorType = 0;
     this->floorPitch = this->floorPitchAlt = sFloorShapePitch = 0;
+
+    //ipi: Eventually hover upwards and explode
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->hoverBootsTimer > 0) {
+        if (this->hoverBootsTimer == 1) {
+            //Create explosion
+            Vec3f velocity;
+            VEC_SET(velocity, 0.0f, 0.0f, 0.0f);
+            EffectSsBomb2_SpawnLayered(play, &this->actor.world, &velocity, &velocity, 100, 20);
+
+            //Cause knockback
+            play->damagePlayer(play, -8);
+            Player* player = GET_PLAYER(play);
+            Audio_PlayActorSound2(&player->actor, NA_SE_PL_BODY_HIT);
+            func_8002F71C(play, &this->actor, 8.0f, this->actor.world.rot.y - 0x8000, 12.0f);
+        } else if (this->hoverBootsTimer < 20) {
+            f32 fakeVelocity = (20 - this->hoverBootsTimer) * 0.5f;
+            this->actor.world.pos.y += fakeVelocity;
+        }
+    }
 
     return 1;
 }
@@ -10795,7 +10821,7 @@ void Player_ProcessSceneCollision(PlayState* play, Player* this) {
     if (this->actor.bgCheckFlags & 1) {
         sFloorType = func_80041D4C(&play->colCtx, floorPoly, this->actor.floorBgId);
 
-        if (!Player_UpdateHoverBoots(this)) {
+        if (!Player_UpdateHoverBoots(play, this)) {
             f32 sp58;
             f32 sp54;
             f32 sp50;
@@ -10826,7 +10852,7 @@ void Player_ProcessSceneCollision(PlayState* play, Player* this) {
             Player_HandleSlopes(play, this, floorPoly);
         }
     } else {
-        Player_UpdateHoverBoots(this);
+        Player_UpdateHoverBoots(play, this);
     }
 
     if (this->prevFloorType == sFloorType) {
@@ -11813,10 +11839,10 @@ void Player_DrawGameplay(PlayState* play, Player* this, s32 lod, Gfx* cullDList,
         s32 sp5C;
         s32 hoverBootsTimer = this->hoverBootsTimer;
 
-        if (this->hoverBootsTimer < 19) {
-            if (hoverBootsTimer >= 15) {
-                D_8085486C = (19 - hoverBootsTimer) * 51.0f;
-            } else if (hoverBootsTimer < 19) {
+        if (this->hoverBootsTimer < HOVER_BOOTS_DURATION) {
+            if (hoverBootsTimer >= HOVER_BOOTS_DURATION - 4) {
+                D_8085486C = (HOVER_BOOTS_DURATION - hoverBootsTimer) * 51.0f;
+            } else if (hoverBootsTimer < HOVER_BOOTS_DURATION) {
                 sp5C = hoverBootsTimer;
 
                 if (sp5C > 9) {

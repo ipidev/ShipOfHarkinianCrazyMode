@@ -181,6 +181,8 @@ typedef struct Actor {
     // #region SOH [General]
     /*       */ u8 maximumHealth; // Max health value for use with health bars, set on actor init
     // #endregion
+    //ipi: Sound effect pitch multiplier
+                f32 sfxFreqScale;
 } Actor; // size = 0x14C
 
 typedef enum {

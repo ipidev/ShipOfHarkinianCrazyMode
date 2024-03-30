@@ -1251,6 +1251,8 @@ void Actor_Init(Actor* actor, PlayState* play) {
             actor->maximumHealth = actor->colChkInfo.health;
         }
     }
+    //ipi: Sound effect pitch multiplier
+    actor->sfxFreqScale = 1.0f;
 }
 
 void Actor_Destroy(Actor* actor, PlayState* play) {
@@ -2249,6 +2251,8 @@ void func_8002F8F0(Actor* actor, u16 sfxId) {
     actor->sfx = sfxId;
     actor->flags |= ACTOR_FLAG_SFX_AT_POS;
     actor->flags &= ~(ACTOR_FLAG_SFX_AT_CENTER | ACTOR_FLAG_SFX_AT_CENTER2 | ACTOR_FLAG_SFX_AS_TIMER);
+    //ipi: Reset sound effect pitch multiplier, most actors won't use it
+    actor->sfxFreqScale = 1.0f;
 }
 
 void func_8002F91C(Actor* actor, u16 sfxId) {
@@ -2758,7 +2762,12 @@ void Actor_Draw(PlayState* play, Actor* actor) {
 
 void func_80030ED8(Actor* actor) {
     if (actor->flags & ACTOR_FLAG_SFX_AT_POS) {
-        Audio_PlaySoundGeneral(actor->sfx, &actor->projectedPos, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+        //ipi: Use actor's freq scale if available
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            Audio_PlaySoundGeneral(actor->sfx, &actor->projectedPos, 4, &actor->sfxFreqScale, &D_801333E0, &D_801333E8);
+        } else {
+            Audio_PlaySoundGeneral(actor->sfx, &actor->projectedPos, 4, &D_801333E0, &D_801333E0, &D_801333E8);
+        }
     } else if (actor->flags & ACTOR_FLAG_SFX_AT_CENTER) {
         func_80078884(actor->sfx);
     } else if (actor->flags & ACTOR_FLAG_SFX_AT_CENTER2) {
