@@ -9,6 +9,12 @@
 #include "objects/object_dekunuts/object_dekunuts.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
+//ipi: To modify speed
+#include "overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
+
+//ipi: To spawn bombs
+#include "overlays/actors/ovl_En_Bom/z_en_bom.h"
+
 #define FLAGS (ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_HOSTILE)
 
 #define DEKUNUTS_FLOWER 10
@@ -186,6 +192,11 @@ void EnDekunuts_SetupBeginRun(EnDekunuts* this) {
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_DAMAGE);
     this->collider.base.acFlags &= ~AC_ON;
     this->actionFunc = EnDekunuts_BeginRun;
+    //ipi: Move immediately to avoid instakill
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->actor.world.rot.y = this->actor.yawTowardsPlayer + 0x8000;
+        this->actor.speedXZ = 10.0f;
+    }
 }
 
 void EnDekunuts_SetupRun(EnDekunuts* this) {
@@ -194,16 +205,37 @@ void EnDekunuts_SetupRun(EnDekunuts* this) {
     this->playWalkSound = false;
     this->collider.base.acFlags |= AC_ON;
     this->actionFunc = EnDekunuts_Run;
+    //ipi: Faster!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed = 2.0f;
+    }
 }
 
-void EnDekunuts_SetupGasp(EnDekunuts* this) {
+void EnDekunuts_SetupGasp(EnDekunuts* this, PlayState* play) {
     Animation_PlayLoop(&this->skelAnime, &gDekuNutsGaspAnim);
-    this->animFlagAndTimer = 3;
+    //ipi: Faster!
+    this->animFlagAndTimer = CVarGetInteger("gIpiCrazyMode", 0) ? 1 : 3;
     this->actor.speedXZ = 0.0f;
     if (this->runAwayCount != 0) {
         this->runAwayCount--;
     }
     this->actionFunc = EnDekunuts_Gasp;
+    //ipi: Throw a bomb if the player is following
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.xzDistToPlayer < 600.0f) {
+        Vec3f spawnPos;
+        Math_Vec3f_Copy(&spawnPos, &this->actor.world.pos);
+        spawnPos.y += 20.0f;
+        EnBom* bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, spawnPos.x, spawnPos.y, spawnPos.z,
+            0, this->actor.yawTowardsPlayer, 0, BOMB_BODY, false);
+        if (bomb != NULL) {
+            Actor_SetScale(&bomb->actor, 0.01f);
+            bomb->timer = 12;
+            bomb->bombCollider.base.ocFlags2 = 0;   //Don't explode on contact with enemies
+            bomb->explosionCollider.base.atFlags = AT_ON | AT_TYPE_ENEMY;  //Don't kill enemies
+            bomb->actor.velocity.y = 8.0f;
+            bomb->actor.speedXZ = CLAMP(this->actor.xzDistToPlayer / 25.0f, 4.0f, 15.0f);
+        }
+    }
 }
 
 void EnDekunuts_SetupBeDamaged(EnDekunuts* this) {
@@ -257,7 +289,8 @@ void EnDekunuts_Wait(EnDekunuts* this, PlayState* play) {
     this->collider.dim.height = ((CLAMP(this->skelAnime.curFrame, 9.0f, 12.0f) - 9.0f) * 9.0f) + 5.0f;
     if (!hasSlowPlaybackSpeed && (this->actor.xzDistToPlayer < 120.0f)) {
         EnDekunuts_SetupBurrow(this);
-    } else if (SkelAnime_Update(&this->skelAnime)) {
+    } else if (SkelAnime_Update(&this->skelAnime) || 
+        (CVarGetInteger("gIpiCrazyMode", 0) && this->skelAnime.curFrame >= 13.0f)) {
         if (this->actor.xzDistToPlayer < 120.0f) {
             EnDekunuts_SetupBurrow(this);
         } else if ((this->animFlagAndTimer == 0) && (this->actor.xzDistToPlayer > 320.0f)) {
@@ -297,7 +330,7 @@ void EnDekunuts_Stand(EnDekunuts* this, PlayState* play) {
         } else {
             EnDekunuts_SetupThrowNut(this);
         }
-    } else if (this->animFlagAndTimer == 0) {
+    } else if (this->animFlagAndTimer == 0 || CVarGetInteger("gIpiCrazyMode", 0)) {
         EnDekunuts_SetupThrowNut(this);
     }
 }
@@ -305,16 +338,38 @@ void EnDekunuts_Stand(EnDekunuts* this, PlayState* play) {
 void EnDekunuts_ThrowNut(EnDekunuts* this, PlayState* play) {
     Vec3f spawnPos;
 
-    Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 2, 0xE38);
+    //ipi: Turn faster
+    s16 turnSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 0x1400 : 0xE38;
+    Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 2, turnSpeed);
     if (SkelAnime_Update(&this->skelAnime)) {
         EnDekunuts_SetupStand(this);
     } else if (Animation_OnFrame(&this->skelAnime, 6.0f)) {
         spawnPos.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y) * 23.0f);
         spawnPos.y = this->actor.world.pos.y + 12.0f;
         spawnPos.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y) * 23.0f);
-        if (Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NUTSBALL, spawnPos.x, spawnPos.y, spawnPos.z,
-                        this->actor.shape.rot.x, this->actor.shape.rot.y, this->actor.shape.rot.z, 0, true) != NULL) {
-            Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_THROW);
+        //ipi: Shoot many more nuts in crazy mode
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            s16 yawOffset = Rand_S16Offset(-0x400, 0x800);
+            s16 pitch = Rand_S16Offset(-0x400, 0x800);
+            EnNutsball* projectile = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NUTSBALL, spawnPos.x, spawnPos.y, spawnPos.z,
+                0, this->actor.shape.rot.y + yawOffset, 0, 2, false);
+            if (projectile != NULL) {
+                projectile->actor.speedXZ = 13.0f;
+                projectile->actor.velocity.y = 13.0f * Math_SinS(pitch);
+                projectile->collider.base.ocFlags1 = OC1_ON | OC1_TYPE_PLAYER;
+                Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_THROW);
+            }
+            //Shoot again if player is in range, otherwise burrow
+            if (this->actor.xzDistToPlayer < 500.0f) {
+                this->skelAnime.curFrame = 0.0f;
+            } else {
+                EnDekunuts_SetupBurrow(this);
+            }
+        } else {
+            if (Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NUTSBALL, spawnPos.x, spawnPos.y, spawnPos.z,
+                            this->actor.shape.rot.x, this->actor.shape.rot.y, this->actor.shape.rot.z, 2, true) != NULL) {
+                Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_THROW);
+            }
         }
     } else if ((this->animFlagAndTimer > 1) && Animation_OnFrame(&this->skelAnime, 12.0f)) {
         Animation_MorphToPlayOnce(&this->skelAnime, &gDekuNutsSpitAnim, -3.0f);
@@ -362,7 +417,9 @@ void EnDekunuts_Run(EnDekunuts* this, PlayState* play) {
         this->playWalkSound = true;
     }
 
-    Math_StepToF(&this->actor.speedXZ, 7.5f, 1.0f);
+    //ipi: Faster!
+    f32 runSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 15.0f : 7.5f;
+    Math_StepToF(&this->actor.speedXZ, runSpeed, runSpeed / 7.5f);
     if (Math_SmoothStepToS(&this->actor.world.rot.y, this->runDirection, 1, 0xE38, 0xB6) == 0) {
         if (this->actor.bgCheckFlags & 0x20) {
             this->runDirection = Actor_WorldYawTowardPoint(&this->actor, &this->actor.home.pos);
@@ -389,7 +446,7 @@ void EnDekunuts_Run(EnDekunuts* this, PlayState* play) {
         this->actor.speedXZ = 0.0f;
         EnDekunuts_SetupBurrow(this);
     } else if (this->animFlagAndTimer == 0) {
-        EnDekunuts_SetupGasp(this);
+        EnDekunuts_SetupGasp(this, play);
     }
 }
 
