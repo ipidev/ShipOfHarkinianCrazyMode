@@ -2349,6 +2349,14 @@ void EnOssan_Update(Actor* thisx, PlayState* play) {
 
     this->timer++;
     this->actionFunc(this, play);
+
+    //ipi: Wooaoahh!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed += 0.02f;
+        if (this->skelAnime.playSpeed >= 4.0f) {
+            this->actor.shape.rot.y += (s16)SQ(this->skelAnime.playSpeed * 5.0f);
+        }
+    }
 }
 
 s32 EnOssan_OverrideLimbDrawDefaultShopkeeper(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos,
