@@ -19,6 +19,10 @@ void func_80B43A94(EnYukabyun* this, PlayState* play);
 void func_80B43AD4(EnYukabyun* this, PlayState* play);
 void func_80B43B6C(EnYukabyun* this, PlayState* play);
 
+//ipi: Slightly different behaviour in crazy mode
+void EnYukabyun_CrazyModeHover(EnYukabyun* this, PlayState* play);
+void EnYukabyun_CrazyModeAttack(EnYukabyun* this, PlayState* play);
+
 const ActorInit En_Yukabyun_InitVars = {
     ACTOR_EN_YUKABYUN,
     ACTORCAT_ENEMY,
@@ -69,6 +73,11 @@ void EnYukabyun_Init(Actor* thisx, PlayState* play) {
     this->actor.params++;
     this->unk_152 = 0;
     this->unk_150 = (u8)(this->actor.params) * 0xA + 0x14;
+    //ipi: Shorter timer in crazy mode
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->unk_150 /= 4;
+        this->collider.info.toucher.damage *= 2;
+    }
     this->actionfunc = func_80B43A94;
 }
 
@@ -83,7 +92,7 @@ void func_80B43A94(EnYukabyun* this, PlayState* play) {
     }
     if (this->unk_150 == 0) {
         this->actor.flags |= ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_IGNORE_QUAKE;
-        this->actionfunc = func_80B43AD4;
+        this->actionfunc = CVarGetInteger("gIpiCrazyMode", 0) ? EnYukabyun_CrazyModeHover : func_80B43AD4;
     }
 }
 
@@ -108,6 +117,47 @@ void func_80B43B6C(EnYukabyun* this, PlayState* play) {
     func_8002F974(&this->actor, NA_SE_EN_YUKABYUN_FLY - SFX_FLAG);
 }
 
+//ipi: Slightly different behaviour in crazy mode
+void EnYukabyun_CrazyModeHover(EnYukabyun* this, PlayState* play) {
+    //ipi: Spin and rise faster
+    this->unk_150 += 0x334;
+    this->actor.shape.rot.y += this->unk_150;
+    if (this->unk_150 >= 0x2000) {
+        this->actor.world.rot.y = this->actor.yawTowardsPlayer;
+        this->actor.speedXZ = 20.0f;
+        this->unk_150 = 30; //Now use this field as a timer
+        this->actionfunc = EnYukabyun_CrazyModeAttack;
+    }
+    Math_StepToF(&this->actor.world.pos.y, this->actor.home.pos.y + 30.0f, 3.0f);
+    func_8002F974(&this->actor, NA_SE_EN_YUKABYUN_FLY - SFX_FLAG);
+}
+
+void EnYukabyun_CrazyModeAttack(EnYukabyun* this, PlayState* play) {
+    this->unk_150--;
+
+    if (this->unk_150 >= 20) {
+        //Dash towards player
+        this->actor.shape.rot.y += 0x3000;
+    } else {
+        //Hover in place and retarget
+        this->actor.shape.rot.y += 0x1800;
+        Math_StepToF(&this->actor.speedXZ, 0.0f, 2.0f);
+
+        //Start another dash
+        if (this->unk_150 == 0) {
+            this->actor.world.rot.y = this->actor.yawTowardsPlayer;
+            this->actor.speedXZ = 20.0f;
+            this->unk_150 = 30;
+        }
+    }
+    //Original behaviour
+    if (this->actor.xzDistToPlayer > 5000.0f) {
+        Actor_Kill(&this->actor);
+        return;
+    }
+    func_8002F974(&this->actor, NA_SE_EN_YUKABYUN_FLY - SFX_FLAG);
+}
+
 void EnYukabyun_Break(EnYukabyun* this, PlayState* play) {
     EffectSsHahen_SpawnBurst(play, &this->actor.world.pos, 8.0f, 0, 1300, 300, 15, OBJECT_YUKABYUN, 10,
                              gFloorTileEnemyFragmentDL);
@@ -119,9 +169,17 @@ void EnYukabyun_Update(Actor* thisx, PlayState* play) {
     EnYukabyun* this = (EnYukabyun*)thisx;
     s32 pad;
 
-    if (((this->collider.base.atFlags & AT_HIT) || (this->collider.base.acFlags & AC_HIT) ||
-         ((this->collider.base.ocFlags1 & OC1_HIT) && !(this->collider.base.oc->id == ACTOR_EN_YUKABYUN))) ||
-        ((this->actionfunc == func_80B43B6C) && (this->actor.bgCheckFlags & 8))) {
+    //ipi: In crazy mode, only break when player attacks
+    u8 breakCondition;
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        breakCondition = (this->collider.base.acFlags & AC_HIT);
+    } else {
+        breakCondition = ((this->collider.base.atFlags & AT_HIT) || (this->collider.base.acFlags & AC_HIT) ||
+            ((this->collider.base.ocFlags1 & OC1_HIT) && !(this->collider.base.oc->id == ACTOR_EN_YUKABYUN))) ||
+            ((this->actionfunc == func_80B43B6C) && (this->actor.bgCheckFlags & 8));
+    }
+
+    if (breakCondition) {
         this->collider.base.atFlags &= ~AT_HIT;
         this->collider.base.acFlags &= ~AC_HIT;
         this->collider.base.ocFlags1 &= ~OC1_HIT;
