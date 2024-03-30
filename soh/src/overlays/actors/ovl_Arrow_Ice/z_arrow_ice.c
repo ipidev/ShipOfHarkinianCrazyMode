@@ -169,6 +169,12 @@ void ArrowIce_Fly(ArrowIce* this, PlayState* play) {
         ArrowIce_SetupAction(this, ArrowIce_Hit);
         this->timer = 32;
         this->alpha = 255;
+        //ipi: Create an ice cube if we hit a wall
+        if (CVarGetInteger("gIpiCrazyMode", 0) && (arrow->hitFlags & 2) == 0) {
+            //For some reason this actually spawns a EnVase actor, but that's also unused so it's fine
+            Actor_Spawn(&play->actorCtx, play, OBJECT_PU_BOX, this->actor.world.pos.x, this->actor.world.pos.y,
+                this->actor.world.pos.z, 0, this->actor.world.rot.y, 0, 0, false);
+        }
     } else if (arrow->timer < 34) {
         if (this->alpha < 35) {
             Actor_Kill(&this->actor);
