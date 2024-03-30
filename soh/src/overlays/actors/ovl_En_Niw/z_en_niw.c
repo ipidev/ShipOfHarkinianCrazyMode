@@ -645,6 +645,11 @@ void func_80AB6BF8(EnNiw* this, PlayState* play) {
         this->actionFunc = func_80AB6D08;
     }
     func_80AB5BF8(this, play, 2);
+
+    //ipi: Spawn attack cuccos while carried!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        EnNiw_SpawnAttackCucco(this, play);
+    }
 }
 
 void func_80AB6D08(EnNiw* this, PlayState* play) {
