@@ -155,6 +155,12 @@ void EnDoor_SetupType(EnDoor* this, PlayState* play) {
         this->actor.flags &= ~ACTOR_FLAG_UPDATE_WHILE_CULLED;
         this->actor.objBankIndex = this->requiredObjBankIndex;
         this->actionFunc = EnDoor_Idle;
+        //ipi: Occasionally use unused door behaviour... spooky!
+        if (CVarGetInteger("gIpiCrazyMode", 0) && (doorType == DOOR_ROOMLOAD || doorType == DOOR_ROOMLOAD2 || doorType == DOOR_ROOMLOAD7) &&
+            (play->sceneNum == SCENE_SHADOW_TEMPLE || play->sceneNum == SCENE_BOTTOM_OF_THE_WELL || play->sceneNum == SCENE_FIRE_TEMPLE || play->sceneNum == SCENE_FOREST_TEMPLE) &&
+            Rand_ZeroOne() < 0.1f) {
+            doorType = DOOR_AJAR;
+        }
         if (doorType == DOOR_EVENING) {
             doorType =
                 (gSaveContext.dayTime > 0xC000 && gSaveContext.dayTime < 0xE000) ? DOOR_SCENEEXIT : DOOR_CHECKABLE;
@@ -165,9 +171,14 @@ void EnDoor_SetupType(EnDoor* this, PlayState* play) {
                 this->lockTimer = 10;
             }
         } else if (doorType == DOOR_AJAR) {
-            if (Actor_WorldDistXZToActor(&this->actor, &GET_PLAYER(play)->actor) > DOOR_AJAR_SLAM_RANGE) {
+            //ipi: Added extra check to ensure ajar door is infront of player
+            if (Actor_WorldDistXZToActor(&this->actor, &GET_PLAYER(play)->actor) > DOOR_AJAR_SLAM_RANGE &&
+                Actor_ActorAIsFacingActorB(&this->actor, &GET_PLAYER(play)->actor, 0x4000)) {
                 this->actionFunc = EnDoor_AjarWait;
                 this->actor.world.rot.y = -0x1800;
+            } else {
+                //ipi: Return to normal door otherwise
+                doorType = DOOR_ROOMLOAD;
             }
         } else if (doorType == DOOR_CHECKABLE) {
             this->actor.textId = (this->actor.params & 0x3F) + 0x0200;
@@ -204,6 +215,11 @@ void EnDoor_Idle(EnDoor* this, PlayState* play) {
             Flags_SetSwitch(play, this->actor.params & 0x3F);
             Audio_PlayActorSound2(&this->actor, NA_SE_EV_CHAIN_KEY_UNLOCK);
         }
+        //ipi: Once the player uses the door, stop being ajar
+        if (CVarGetInteger("gIpiCrazyMode", 0) && doorType == DOOR_AJAR) {
+            doorType = DOOR_ROOMLOAD;
+            this->actor.params = (this->actor.params & ~0x380) | (doorType << 7);
+        }
     } else if (!Player_InCsMode(play)) {
         if (fabsf(playerPosRelToDoor.y) < 20.0f && fabsf(playerPosRelToDoor.x) < 20.0f &&
             fabsf(playerPosRelToDoor.z) < 50.0f) {
@@ -222,12 +238,14 @@ void EnDoor_Idle(EnDoor* this, PlayState* play) {
                         player->doorTimer = 10;
                     }
                 }
-                player->doorType = (doorType == DOOR_AJAR) ? PLAYER_DOORTYPE_AJAR : PLAYER_DOORTYPE_HANDLE;
+                //ipi: Allow player to open doors that were ajar. Setting is unused anyway
+                player->doorType = (doorType == DOOR_AJAR && !CVarGetInteger("gIpiCrazyMode", 0)) ? PLAYER_DOORTYPE_AJAR : PLAYER_DOORTYPE_HANDLE;
                 player->doorDirection = (playerPosRelToDoor.z >= 0.0f) ? 1.0f : -1.0f;
                 player->doorActor = &this->actor;
             }
         } else if (doorType == DOOR_AJAR && this->actor.xzDistToPlayer > DOOR_AJAR_OPEN_RANGE) {
             this->actionFunc = EnDoor_AjarOpen;
+            Audio_PlayActorSound2(&this->actor, NA_SE_EV_DOOR_OPEN);
         }
     }
 }
@@ -263,6 +281,7 @@ void EnDoor_AjarOpen(EnDoor* this, PlayState* play) {
 void EnDoor_AjarClose(EnDoor* this, PlayState* play) {
     if (Math_ScaledStepToS(&this->actor.world.rot.y, 0, 0x700)) {
         this->actionFunc = EnDoor_Idle;
+        Audio_PlayActorSound2(&this->actor, NA_SE_EV_DOOR_CLOSE);
     }
 }
 
