@@ -3,6 +3,9 @@
 #include "objects/gameplay_field_keep/gameplay_field_keep.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
+//ipi: To spawn bombs
+#include "overlays/actors/ovl_En_Bom/z_en_bom.h"
+
 #define FLAGS (ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_HOSTILE)
 
 void EnOkuta_Init(Actor* thisx, PlayState* play);
@@ -156,7 +159,10 @@ void EnOkuta_Init(Actor* thisx, PlayState* play) {
         this->timer = 30;
         thisx->shape.rot.y = 0;
         this->actionFunc = EnOkuta_ProjectileFly;
-        thisx->speedXZ = 10.0f;
+        //ipi: Don't overwrite speed set by Octorok
+        if (!CVarGetInteger("gIpiCrazyMode", 0)) {
+            thisx->speedXZ = 10.0f;
+        }
     }
 }
 
@@ -207,6 +213,10 @@ void EnOkuta_SetupWaitToAppear(EnOkuta* this) {
     this->actor.flags &= ~ACTOR_FLAG_TARGETABLE;
     this->actionFunc = EnOkuta_WaitToAppear;
     this->actor.world.pos.y = this->actor.home.pos.y;
+    //ipi: No need for culled updates while hidden
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->actor.flags |= ACTOR_FLAG_UPDATE_WHILE_CULLED;
+    }
 }
 
 void EnOkuta_SetupAppear(EnOkuta* this, PlayState* play) {
@@ -216,6 +226,10 @@ void EnOkuta_SetupAppear(EnOkuta* this, PlayState* play) {
     Animation_PlayOnce(&this->skelAnime, &gOctorokAppearAnim);
     EnOkuta_SpawnBubbles(this, play);
     this->actionFunc = EnOkuta_Appear;
+    //ipi: Also update while offscreen
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->actor.flags |= ACTOR_FLAG_UPDATE_WHILE_CULLED;
+    }
 }
 
 void EnOkuta_SetupHide(EnOkuta* this) {
@@ -225,14 +239,20 @@ void EnOkuta_SetupHide(EnOkuta* this) {
 
 void EnOkuta_SetupWaitToShoot(EnOkuta* this) {
     Animation_PlayLoop(&this->skelAnime, &gOctorokFloatAnim);
-    this->timer = (this->actionFunc == EnOkuta_Shoot) ? 2 : 0;
+    //ipi: No waiting!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->timer = 0;
+    } else {
+        this->timer = (this->actionFunc == EnOkuta_Shoot) ? 2 : 0;
+    }
     this->actionFunc = EnOkuta_WaitToShoot;
 }
 
 void EnOkuta_SetupShoot(EnOkuta* this, PlayState* play) {
     Animation_PlayOnce(&this->skelAnime, &gOctorokShootAnim);
     if (this->actionFunc != EnOkuta_Shoot) {
-        this->timer = this->numShots;
+        //ipi: Shoot a billion times for "fun"
+        this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? INT16_MAX : this->numShots;
     }
     this->jumpHeight = this->actor.yDistToPlayer + 20.0f;
     this->jumpHeight = CLAMP_MIN(this->jumpHeight, 10.0f);
@@ -272,12 +292,14 @@ void EnOkuta_SpawnProjectile(EnOkuta* this, PlayState* play) {
     Vec3f velocity;
     f32 sin = Math_SinS(this->actor.shape.rot.y);
     f32 cos = Math_CosS(this->actor.shape.rot.y);
+    Actor* projectile;
 
     pos.x = this->actor.world.pos.x + (25.0f * sin);
     pos.y = this->actor.world.pos.y - 6.0f;
     pos.z = this->actor.world.pos.z + (25.0f * cos);
-    if (Actor_Spawn(&play->actorCtx, play, ACTOR_EN_OKUTA, pos.x, pos.y, pos.z, this->actor.shape.rot.x,
-                    this->actor.shape.rot.y, this->actor.shape.rot.z, 0x10, true) != NULL) {
+    //ipi: Actually need the projectile here
+    if (projectile = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_OKUTA, pos.x, pos.y, pos.z, this->actor.shape.rot.x,
+                    this->actor.shape.rot.y, this->actor.shape.rot.z, 0x10, true)) {
         pos.x = this->actor.world.pos.x + (40.0f * sin);
         pos.z = this->actor.world.pos.z + (40.0f * cos);
         pos.y = this->actor.world.pos.y;
@@ -285,6 +307,13 @@ void EnOkuta_SpawnProjectile(EnOkuta* this, PlayState* play) {
         velocity.y = 0.0f;
         velocity.z = 1.5f * cos;
         EnOkuta_SpawnDust(&pos, &velocity, 20, play);
+
+        //ipi: Set speed of projectile here instead, we home later with direct velocity change
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            projectile->velocity.x = 10.0f * sin;
+            projectile->velocity.y = 0;
+            projectile->velocity.z = 10.0f * cos;
+        }
     }
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_THROW);
 }
@@ -395,6 +424,10 @@ void EnOkuta_Shoot(EnOkuta* this, PlayState* play) {
     if (this->actor.xzDistToPlayer < 160.0f) {
         EnOkuta_SetupHide(this);
     }
+    //ipi: Need extra hide condition, or we loop forever
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.xzDistToPlayer > 1200.0f) {
+        EnOkuta_SetupHide(this);
+    }
 }
 
 void EnOkuta_WaitToDie(EnOkuta* this, PlayState* play) {
@@ -483,6 +516,42 @@ void EnOkuta_ProjectileFly(EnOkuta* this, PlayState* play) {
     if (this->timer == 0) {
         this->actor.gravity = -1.0f;
     }
+    //ipi: Act more like a rocket!
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->timer > 0) {
+        Player* player = GET_PLAYER(play);
+        Vec3f targetPos;
+        targetPos.x = player->actor.world.pos.x;
+        targetPos.y = player->actor.world.pos.y + 5.0f;
+        targetPos.z = player->actor.world.pos.z;
+
+        //Start homing towards the player
+        Vec3f deltaDir;
+        f32 deltaDist = Math_Vec3f_DistXYZAndStoreDiff(&this->actor.world.pos, &targetPos, &deltaDir);
+        if (deltaDist > 0.0f) {
+            f32 homeSpeed = this->timer < 25 ? 4.0f : 1.0f;
+            Math_Vec3f_Scale(&deltaDir, (1.0f / deltaDist) * homeSpeed);  //Normalize
+            this->actor.velocity.x += deltaDir.x;
+            this->actor.velocity.y += deltaDir.y;
+            this->actor.velocity.z += deltaDir.z;
+        }
+
+        //Cap speed
+        f32 speed = sqrtf(SQ(this->actor.velocity.x) + SQ(this->actor.velocity.y) + SQ(this->actor.velocity.z));
+        if (speed > 0.0f) {
+            Math_Vec3f_Scale(&this->actor.velocity, 1.0f / speed);  //Normalize
+            speed = CLAMP_MIN(speed, 15.0f);
+            Math_Vec3f_Scale(&this->actor.velocity, speed);
+        }
+
+        //Create smoke trail
+        if (this->timer & 1) {
+            Vec3f smokePos, smokeVelocity;
+            Math_Vec3f_Copy(&smokePos, &this->actor.world.pos);
+            smokePos.y += 6.0f;
+            VEC_SET(smokeVelocity, 0.0f, 0.0f, 0.0f);
+            EnOkuta_SpawnDust(&smokePos, &smokeVelocity, 20, play);
+        }
+    }
     this->actor.home.rot.z += 0x1554;
     if (this->actor.bgCheckFlags & 0x20) {
         this->actor.gravity = -1.0f;
@@ -496,17 +565,32 @@ void EnOkuta_ProjectileFly(EnOkuta* this, PlayState* play) {
              (player->currentShield == PLAYER_SHIELD_HYLIAN && LINK_IS_ADULT)) &&
             this->collider.base.atFlags & AT_HIT && this->collider.base.atFlags & AT_TYPE_ENEMY &&
             this->collider.base.atFlags & AT_BOUNCED) {
-            this->collider.base.atFlags &= ~(AT_HIT | AT_BOUNCED | AT_TYPE_ENEMY);
-            this->collider.base.atFlags |= AT_TYPE_PLAYER;
-            this->collider.info.toucher.dmgFlags = 2;
-            Matrix_MtxFToYXZRotS(&player->shieldMf, &sp40, 0);
-            this->actor.world.rot.y = sp40.y + 0x8000;
-            this->timer = 30;
+            //ipi: Don't reflect back to Octorok, just reverse direction
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                this->actor.velocity.x *= -1.0f;
+                this->actor.velocity.y *= -1.0f;
+                this->actor.velocity.z *= -1.0f;
+            } else {
+                this->collider.base.atFlags &= ~(AT_HIT | AT_BOUNCED | AT_TYPE_ENEMY);
+                this->collider.base.atFlags |= AT_TYPE_PLAYER;
+                this->collider.info.toucher.dmgFlags = 2;
+                Matrix_MtxFToYXZRotS(&player->shieldMf, &sp40, 0);
+                this->actor.world.rot.y = sp40.y + 0x8000;
+                this->timer = 30;
+            }
         } else {
             pos.x = this->actor.world.pos.x;
             pos.y = this->actor.world.pos.y + 11.0f;
             pos.z = this->actor.world.pos.z;
-            if (CVarGetInteger("gNewDrops", 0) != 0) {
+            //ipi: Explode instead of breaking
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                EnBom* bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, pos.x, pos.y, pos.z,
+                    0, 0, 0, BOMB_BODY, false);
+                if (bomb != NULL) {
+                    bomb->timer = 0;
+                    bomb->explosionCollider.base.atFlags = AT_ON | AT_TYPE_ENEMY;
+                }
+            } else if (CVarGetInteger("gNewDrops", 0) != 0) {
                 static s16 sEffectScales[] = {
                     145, 135, 115, 85, 75, 53, 45, 40, 35,
                 };
@@ -651,7 +735,12 @@ void EnOkuta_Update(Actor* thisx, PlayState* play2) {
                  this->actor.scale.y * 100.0f);
         } else {
             sp34 = false;
-            Actor_MoveForward(&this->actor);
+            //ipi: Don't use yaw/speedXZ for projectile movement, just apply velocity directly
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                func_8002D7EC(&this->actor);
+            } else {
+                Actor_MoveForward(&this->actor);
+            }
             Math_Vec3f_Copy(&sp38, &this->actor.world.pos);
             Actor_UpdateBgCheckInfo(play, &this->actor, 10.0f, 15.0f, 30.0f, 5);
             if ((this->actor.bgCheckFlags & 8) &&
