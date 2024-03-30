@@ -1,6 +1,9 @@
 #include "z_en_shopnuts.h"
 #include "objects/object_shopnuts/object_shopnuts.h"
 
+//ipi: To modify speed
+#include "overlays/actors/ovl_En_Nutsball/z_en_nutsball.h"
+
 #define FLAGS (ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_HOSTILE)
 
 void EnShopnuts_Init(Actor* thisx, PlayState* play);
@@ -155,7 +158,8 @@ void EnShopnuts_Wait(EnShopnuts* this, PlayState* play) {
     this->collider.dim.height = ((CLAMP(this->skelAnime.curFrame, 9.0f, 13.0f) - 9.0f) * 9.0f) + 5.0f;
     if (!hasSlowPlaybackSpeed && (this->actor.xzDistToPlayer < 120.0f)) {
         EnShopnuts_SetupBurrow(this);
-    } else if (SkelAnime_Update(&this->skelAnime)) {
+    } else if (SkelAnime_Update(&this->skelAnime) || 
+        (CVarGetInteger("gIpiCrazyMode", 0) && this->skelAnime.curFrame >= 13.0f)) {
         if (this->actor.xzDistToPlayer < 120.0f) {
             EnShopnuts_SetupBurrow(this);
         } else if ((this->animFlagAndTimer == 0) && (this->actor.xzDistToPlayer > 320.0f)) {
@@ -191,7 +195,7 @@ void EnShopnuts_Stand(EnShopnuts* this, PlayState* play) {
     }
     if ((this->actor.xzDistToPlayer < 120.0f) || (this->animFlagAndTimer == 0x1000)) {
         EnShopnuts_SetupBurrow(this);
-    } else if (this->animFlagAndTimer == 0) {
+    } else if (this->animFlagAndTimer == 0 || CVarGetInteger("gIpiCrazyMode", 0)) {
         EnShopnuts_SetupThrowNut(this);
     }
 }
@@ -199,7 +203,9 @@ void EnShopnuts_Stand(EnShopnuts* this, PlayState* play) {
 void EnShopnuts_ThrowNut(EnShopnuts* this, PlayState* play) {
     Vec3f spawnPos;
 
-    Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 2, 0xE38);
+    //ipi: Turn faster
+    s16 turnSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 0x1400 : 0xE38;
+    Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 2, turnSpeed);
     if (this->actor.xzDistToPlayer < 120.0f) {
         EnShopnuts_SetupBurrow(this);
     } else if (SkelAnime_Update(&this->skelAnime)) {
@@ -208,9 +214,29 @@ void EnShopnuts_ThrowNut(EnShopnuts* this, PlayState* play) {
         spawnPos.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y) * 23.0f);
         spawnPos.y = this->actor.world.pos.y + 12.0f;
         spawnPos.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y) * 23.0f);
-        if (Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NUTSBALL, spawnPos.x, spawnPos.y, spawnPos.z,
-                        this->actor.shape.rot.x, this->actor.shape.rot.y, this->actor.shape.rot.z, 2, true) != NULL) {
-            Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_THROW);
+        //ipi: Shoot many more nuts in crazy mode
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            s16 yawOffset = Rand_S16Offset(-0x400, 0x800);
+            s16 pitch = Rand_S16Offset(-0x400, 0x800);
+            EnNutsball* projectile = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NUTSBALL, spawnPos.x, spawnPos.y, spawnPos.z,
+                0, this->actor.shape.rot.y + yawOffset, 0, 2, false);
+            if (projectile != NULL) {
+                projectile->actor.speedXZ = 13.0f;
+                projectile->actor.velocity.y = 13.0f * Math_SinS(pitch);
+                projectile->collider.base.ocFlags1 = OC1_ON | OC1_TYPE_PLAYER;
+                Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_THROW);
+            }
+            //Shoot again if player is in range, otherwise burrow
+            if (this->actor.xzDistToPlayer < 500.0f) {
+                this->skelAnime.curFrame = 0.0f;
+            } else {
+                EnShopnuts_SetupBurrow(this);
+            }
+        } else {
+            if (Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NUTSBALL, spawnPos.x, spawnPos.y, spawnPos.z,
+                            this->actor.shape.rot.x, this->actor.shape.rot.y, this->actor.shape.rot.z, 2, true) != NULL) {
+                Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_THROW);
+            }
         }
     }
 }
