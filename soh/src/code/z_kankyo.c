@@ -2110,6 +2110,15 @@ void func_80075B44(PlayState* play) {
                      Inventory_HatchPocketCucco(play)) &&
                     play->csCtx.state == 0 && !Player_InCsMode(play)) {
                     Message_StartTextbox(play, 0x3066, NULL);
+                    //ipi: Also spawn a cucco when the egg hatches
+                    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                        Player* player = GET_PLAYER(play);
+                        Actor* cucco = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NIW, player->actor.world.pos.x, player->actor.world.pos.y,
+                            player->actor.world.pos.z, 0, player->actor.world.rot.y, 0, 0, false);
+                        if (cucco != NULL) {
+                            cucco->room = -1;
+                        }
+                    }
                 }
                 play->envCtx.unk_E0++;
             }

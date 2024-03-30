@@ -14142,6 +14142,26 @@ void Player_Action_8084F104(Player* this, PlayState* play) {
 
                 if ((this->itemAction == PLAYER_IA_CHICKEN) || (this->itemAction == PLAYER_IA_POCKET_CUCCO)) {
                     Player_PlaySfx(this, NA_SE_EV_CHICKEN_CRY_M);
+                    //ipi: Also spawn a cucco when using the chicken items
+                    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                        //Should appear in Link's hand
+                        s16 angle = this->actor.world.rot.y + 0x3800;
+                        f32 sin = Math_SinS(angle);
+                        f32 cos = Math_CosS(angle);
+
+                        //Adjust for age
+                        f32 horizDistance = LINK_IS_ADULT ? 10.0f : 7.0f;
+                        f32 vertDistance = LINK_IS_ADULT ? 60.0f : 40.0f;
+                        Vec3f pos;
+                        pos.x = this->actor.world.pos.x + (horizDistance * sin);
+                        pos.y = this->actor.world.pos.y + vertDistance;
+                        pos.z = this->actor.world.pos.z + (horizDistance * cos);
+                        Actor* cucco = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NIW, pos.x, pos.y, pos.z,
+                            0, angle, 0, 0, false);
+                        if (cucco != NULL) {
+                            cucco->room = -1;
+                        }
+                    }
                 }
 
                 this->av2.actionVar2 = 1;

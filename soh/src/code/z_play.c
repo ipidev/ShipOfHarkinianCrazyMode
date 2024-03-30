@@ -604,6 +604,8 @@ void Play_Init(GameState* thisx) {
     KaleidoScopeCall_Init(play);
     func_801109B0(play);
 
+    //ipi: Also spawn a cucco when the egg hatches (have to do it later as player is null)
+    u8 shouldSpawnCucco = false;
     if (gSaveContext.nextDayTime != 0xFFFF) {
         if (gSaveContext.nextDayTime == 0x8001) {
             gSaveContext.totalDays++;
@@ -612,6 +614,7 @@ void Play_Init(GameState* thisx) {
             if (Inventory_ReplaceItem(play, ITEM_WEIRD_EGG, ITEM_CHICKEN) ||
                 Inventory_HatchPocketCucco(play)) {
                 Message_StartTextbox(play, 0x3066, NULL);
+                shouldSpawnCucco = true;
             }
             gSaveContext.nextDayTime = 0xFFFE;
         } else {
@@ -766,6 +769,16 @@ void Play_Init(GameState* thisx) {
         Actor_Spawn(&play->actorCtx, play, gEnPartnerId, GET_PLAYER(play)->actor.world.pos.x,
                     GET_PLAYER(play)->actor.world.pos.y + Player_GetHeight(GET_PLAYER(play)) + 5.0f,
                     GET_PLAYER(play)->actor.world.pos.z, 0, 0, 0, 1, true);
+    }
+
+    //ipi: Also spawn a cucco when the egg hatches
+    if (CVarGetInteger("gIpiCrazyMode", 0) && shouldSpawnCucco) {
+        Player* player = GET_PLAYER(play);
+        Actor* cucco = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_NIW, player->actor.world.pos.x, player->actor.world.pos.y,
+            player->actor.world.pos.z, 0, player->actor.world.rot.y, 0, 0, false);
+        if (cucco != NULL) {
+            cucco->room = -1;
+        }
     }
 }
 
