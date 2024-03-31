@@ -162,9 +162,39 @@ void BgDdanJd_Move(BgDdanJd* this, PlayState* play) {
         this->idleTimer = 0;
         this->actionFunc = BgDdanJd_Idle;
         OnePointCutscene_Init(play, 3060, -99, &this->dyna.actor, MAIN_CAM);
-    } else if (Math_StepToF(&this->dyna.actor.world.pos.y, this->targetY, this->ySpeed)) {
-        Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EV_PILLAR_MOVE_STOP);
-        this->actionFunc = BgDdanJd_Idle;
+    } else {
+        //ipi: Accelerate when moving from the middle to the top
+        u8 acceleratingToTop = CVarGetInteger("gIpiCrazyMode", 0) && this->state == STATE_GO_TOP;
+        f32 speed = this->ySpeed;
+        if (acceleratingToTop && this->dyna.actor.world.pos.y >= this->dyna.actor.home.pos.y + MOVE_HEIGHT_MIDDLE) {
+            this->idleTimer++;
+            speed += this->idleTimer - IDLE_FRAMES;
+            this->dyna.actor.sfxFreqScale = 1.0f + (this->idleTimer - IDLE_FRAMES) * 0.025f;
+        }
+        //ipi: Use our possibly-adjusted speed instead
+        if (Math_StepToF(&this->dyna.actor.world.pos.y, this->targetY, speed)) {
+            Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EV_PILLAR_MOVE_STOP);
+            this->actionFunc = BgDdanJd_Idle;
+            //ipi: Upon reaching the top, throw the player off
+            if (acceleratingToTop) {
+                Player* player = GET_PLAYER(play);
+                if (this->dyna.actor.xzDistToPlayer < 95.0f && (player->actor.bgCheckFlags & 1) != 0 &&
+                    player->actor.world.pos.y >= this->dyna.actor.world.pos.y) {
+                    func_8002F71C(play, &this->dyna.actor, 9.0f, 0x2000, 14.0f);
+                }
+                //Play a louder sound that won't get overwritten by the movement sound
+                SoundSource_PlaySfxAtFixedWorldPos(play, &this->dyna.actor.world.pos, 40, NA_SE_EV_STONE_BOUND/*NA_SE_EV_STONEDOOR_STOP*/);
+                //Spawn a shockwave
+                static Vec3f sZero = { 0.0f, 0.0f, 0.0f };
+                Vec3f shockwavePos;
+                Math_Vec3f_Copy(&shockwavePos, &this->dyna.actor.home.pos);
+                shockwavePos.y += 10.0f;
+                EffectSsBlast_SpawnWhiteCustomScale(play, &shockwavePos, &sZero, &sZero, 500, 200, 10);
+                //Return to the lower height immediately
+                this->idleTimer = 0;
+                this->dyna.actor.sfxFreqScale = 1.0f;
+            }
+        }
     }
     BgDdanJd_MoveEffects(this, play);
 }
