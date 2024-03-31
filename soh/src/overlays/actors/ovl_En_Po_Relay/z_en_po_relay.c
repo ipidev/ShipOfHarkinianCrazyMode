@@ -141,7 +141,8 @@ void EnPoRelay_SetupRace(EnPoRelay* this) {
     Vec3f vec;
 
     EnPoRelay_Vec3sToVec3f(&vec, &D_80AD8C30[this->pathIndex]);
-    this->actionTimer = ((s16)(this->actor.shape.rot.y - this->actor.world.rot.y - 0x8000) >> 0xB) % 32U;
+    //ipi: Don't spin at the beginning of the race
+    this->actionTimer = CVarGetInteger("gIpiCrazyMode", 0) ? 4 : ((s16)(this->actor.shape.rot.y - this->actor.world.rot.y - 0x8000) >> 0xB) % 32U;
     func_80088B34(0);
     this->hookshotSlotFull = (INV_CONTENT(ITEM_HOOKSHOT) != ITEM_NONE && !IS_RANDO) ||
                              (IS_RANDO && Flags_GetTreasure(gPlayState, 0x1E));
@@ -182,6 +183,19 @@ void EnPoRelay_Talk(EnPoRelay* this, PlayState* play) {
         Actor_SetTextWithPrefix(play, &this->actor, 0x2F);
         this->textId = this->actor.textId;
         EnPoRelay_SetupRace(this);
+
+        //ipi: Spawn some extra obstacles... why not!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            static Vec3f sEyeTrapPositions[] = { { 1900.0f, -490.0f, -5195.0f }, { 2010.0f, -500.0f, -3505.0f }, { 1655.0f, -500.0f, -3055.0f }, { 2890.0f, -190.0f, -1965.0f }, };
+            static s16 sEyeTrapRotations[] = { 0xC000, 0x8000, 0x8000, 0x8000, };
+            for (s32 i = 0; i < 4; i++) {
+                Actor* eyeTrap = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_HONOTRAP, sEyeTrapPositions[i].x, sEyeTrapPositions[i].y,
+                        sEyeTrapPositions[i].z, 0, sEyeTrapRotations[i], 0, HONOTRAP_EYE, false);
+                if (eyeTrap != NULL) {
+                    eyeTrap->room = -1;
+                } 
+            }
+        }
     }
     func_8002F974(&this->actor, NA_SE_EN_PO_FLY - SFX_FLAG);
 }
@@ -195,8 +209,10 @@ void EnPoRelay_Race(EnPoRelay* this, PlayState* play) {
     if (this->actionTimer != 0) {
         this->actionTimer--;
     }
-    if (this->actionTimer == 0 && Rand_ZeroOne() < 0.03f) {
-        this->actionTimer = 32;
+    //ipi: Throw flames regularly instead of by chance
+    if (this->actionTimer == 0 && (Rand_ZeroOne() < 0.03f || CVarGetInteger("gIpiCrazyMode", 0))) {
+        //ipi: Crazy mode spins faster, reduce timer
+        this->actionTimer = CVarGetInteger("gIpiCrazyMode", 0) ? 12 : 32;
         if (this->pathIndex < 23) {
             speed = Rand_ZeroOne() * 3.0f;
             if (speed < 1.0f) {
@@ -215,7 +231,14 @@ void EnPoRelay_Race(EnPoRelay* this, PlayState* play) {
         }
     }
     Math_SmoothStepToS(&this->actor.world.rot.y, this->unk_19A, 2, 0x1000, 0x100);
-    this->actor.shape.rot.y = this->actor.world.rot.y + (this->actionTimer * 0x800) + 0x8000;
+    //ipi: Crazy mode spins faster
+    s16 spinOffset;
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        spinOffset = this->actionTimer > 4 ? (this->actionTimer - 4) * 0x2000 : 0;
+    } else {
+        spinOffset = this->actionTimer * 0x800;
+    }
+    this->actor.shape.rot.y = this->actor.world.rot.y + spinOffset + 0x8000;
     if (this->pathIndex < 23) {
         // If the player travels along a different path to Dampé that converges later
         if ((Math3D_PointInSquare2D(660.0f, 840.0f, -4480.0f, -3760.0f, player->actor.world.pos.x,
@@ -237,6 +260,10 @@ void EnPoRelay_Race(EnPoRelay* this, PlayState* play) {
         multiplier = 250.0f - this->actor.xzDistToPlayer;
         multiplier = CLAMP_MIN(multiplier, 0.0f);
         speed += multiplier * 0.02f + 1.0f;
+        //ipi: Faster!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            speed *= 2.0f;
+        }
         Math_ApproachF(&this->actor.speedXZ, speed, 0.5f, 1.5f);
     } else {
         Math_ApproachF(&this->actor.speedXZ, 3.5f, 0.5f, 1.5f);

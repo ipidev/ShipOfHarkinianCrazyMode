@@ -135,7 +135,8 @@ void func_808A90F4(BgRelayObjects* this, PlayState* play) {
 }
 
 void func_808A91AC(BgRelayObjects* this, PlayState* play) {
-    if (this->unk_169 != 5) {
+    //ipi: No timer in crazy mode, Dampe is too fast!
+    if (this->unk_169 != 5 && !CVarGetInteger("gIpiCrazyMode", 0)) {
         if (this->timer != 0) {
             this->timer--;
         }

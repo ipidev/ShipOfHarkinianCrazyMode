@@ -325,12 +325,22 @@ void EnHonotrap_SetupFlameDrop(EnHonotrap* this) {
     this->actor.velocity.y = 1.0f;
     this->actor.velocity.x = 2.0f * Math_SinS(this->actor.world.rot.y);
     this->actor.velocity.z = 2.0f * Math_CosS(this->actor.world.rot.y);
+    //ipi: Use additional timer during Dampe race in crazy mode to clean up fire
+    this->proximityTimer = 0;
     this->actionFunc = EnHonotrap_FlameDrop;
 }
 
 void EnHonotrap_FlameDrop(EnHonotrap* this, PlayState* play) {
-    //ipi: Dampe's flames don't disappear over time in crazy mode
-    if ((this->collider.cyl.base.atFlags & AT_HIT) || (this->timer <= 0 && !CVarGetInteger("gIpiCrazyMode", 0))) {
+    //ipi: Use a separate timer that only activates on proximity
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.xzDistToPlayer < 100.0f) {
+        this->proximityTimer = 40;
+    }
+    if (this->proximityTimer > 0) {
+        this->proximityTimer--;
+    }
+    //ipi: Choose the correct timer value here
+    u8 hasTimerExpired = CVarGetInteger("gIpiCrazyMode", 0) ? (this->proximityTimer == 1) : (this->timer <= 0);
+    if ((this->collider.cyl.base.atFlags & AT_HIT) || hasTimerExpired) {
         if ((this->collider.cyl.base.atFlags & AT_HIT) && !(this->collider.cyl.base.atFlags & AT_BOUNCED)) {
             func_8002F71C(play, &this->actor, 5.0f, this->actor.yawTowardsPlayer, 0.0f);
         }

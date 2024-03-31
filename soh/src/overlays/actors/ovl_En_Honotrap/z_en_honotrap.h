@@ -27,6 +27,8 @@ typedef struct EnHonotrap {
     /* 0x023C */ s16 bobPhase;
     /* 0x023E */ s16 flameScroll;
     /* 0x0240 */ u8 colChkFlags;
+    //ipi: Extra timer for flames during Dampe race
+                 u8 proximityTimer;
 } EnHonotrap; // size = 0x0244
 
 typedef enum {
