@@ -95,7 +95,9 @@ void BgHakaShip_WaitForSong(BgHakaShip* this, PlayState* play) {
             this->counter = 130;
             this->actionFunc = BgHakaShip_CutsceneStationary;
             osSyncPrintf("シーン 外輪船 ...  アァクション！！\n");
-            OnePointCutscene_Init(play, 3390, 999, &this->dyna.actor, MAIN_CAM);
+            //ipi: Faster!
+            s16 cutsceneTime = CVarGetInteger("gIpiCrazyMode", 0) ? 300 : 999;
+            OnePointCutscene_Init(play, 3390, cutsceneTime, &this->dyna.actor, MAIN_CAM);
         }
     }
 }
@@ -134,7 +136,10 @@ void BgHakaShip_Move(BgHakaShip* this, PlayState* play) {
         Message_StartTextbox(play, 0x5071, NULL);
         this->actionFunc = BgHakaShip_SetupCrash;
     } else {
-        Math_StepToF(&this->dyna.actor.speedXZ, 4.0f, 0.2f);
+        //ipi: Faster!
+        f32 speed = CVarGetInteger("gIpiCrazyMode", 0) ? 20.0f : 4.0f;
+        f32 step = CVarGetInteger("gIpiCrazyMode", 0) ? 1.0f : 0.2f;
+        Math_StepToF(&this->dyna.actor.speedXZ, speed, step);
     }
     child = this->dyna.actor.child;
     if (child != NULL && child->update != NULL) {
