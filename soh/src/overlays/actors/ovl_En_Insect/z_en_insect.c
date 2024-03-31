@@ -8,6 +8,9 @@
 #include "vt.h"
 #include "objects/gameplay_keep/gameplay_keep.h"
 
+//ipi: To explode
+#include "overlays/actors/ovl_En_Bom/z_en_bom.h"
+
 #define FLAGS 0
 
 void EnInsect_Init(Actor* thisx, PlayState* play);
@@ -31,6 +34,10 @@ void func_80A7D1F4(EnInsect* this);
 void func_80A7D26C(EnInsect* this, PlayState* play);
 void func_80A7D39C(EnInsect* this);
 void func_80A7D460(EnInsect* this, PlayState* play);
+
+//ipi: Explode!
+void EnInsect_SetupInflate(EnInsect* this);
+void EnInsect_Inflate(EnInsect* this, PlayState* play);
 
 f32 D_80A7DEB0 = 0.0f;
 s16 D_80A7DEB4 = 0;
@@ -272,7 +279,12 @@ void func_80A7C3F4(EnInsect* this, PlayState* play) {
 
     if (((this->unk_314 & 4) && this->unk_31C <= 0) ||
         ((sp2E == 2 || sp2E == 3) && (this->unk_314 & 1) && (this->actor.bgCheckFlags & 1) && D_80A7DEB8 >= 4)) {
-        func_80A7CBC8(this);
+        //ipi: Explode instead of digging away
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            EnInsect_SetupInflate(this);
+        } else {
+            func_80A7CBC8(this); //Digging when idle
+        }
     } else if ((this->unk_314 & 1) && (this->actor.bgCheckFlags & 0x40)) {
         func_80A7CE60(this);
     } else if (this->actor.xzDistToPlayer < 40.0f) {
@@ -314,7 +326,12 @@ void func_80A7C5EC(EnInsect* this, PlayState* play) {
 
     if (((this->unk_314 & 4) && this->unk_31C <= 0) ||
         ((sp34 == 2 || sp34 == 3) && (this->unk_314 & 1) && (this->actor.bgCheckFlags & 1) && D_80A7DEB8 >= 4)) {
-        func_80A7CBC8(this);
+        //ipi: Explode instead of digging away
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            EnInsect_SetupInflate(this);
+        } else {
+            func_80A7CBC8(this); //Digging when idle
+        }
     } else if ((this->unk_314 & 1) && (this->actor.bgCheckFlags & 0x40)) {
         func_80A7CE60(this);
     } else if (this->actor.xzDistToPlayer < 40.0f) {
@@ -409,6 +426,31 @@ void func_80A7CBC8(EnInsect* this) {
     this->actionFunc = func_80A7CC3C;
     this->unk_314 &= ~0x100;
     this->unk_314 |= 0x8;
+}
+
+//ipi: Explode!
+void EnInsect_SetupInflate(EnInsect* this) {
+    this->skelAnime.playSpeed = 0.0f;
+    this->actor.speedXZ = 0.0f;
+    Audio_PlayActorSound2(&this->actor, NA_SE_EN_PO_APPEAR);
+    this->actionFunc = EnInsect_Inflate;
+}
+
+void EnInsect_Inflate(EnInsect* this, PlayState* play) {
+    f32 scale = this->actor.scale.y;
+    if (Math_SmoothStepToF(&scale, 0.05f, 0.1f, 0.01f, 0.0005f) == 0.0f) {
+        Vec3f pos;
+        Math_Vec3f_Copy(&pos, &this->actor.world);
+        pos.y += 10.0f;
+        EnBom* bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->actor.world.pos.x,
+            this->actor.world.pos.y, this->actor.world.pos.z, 0, 0, 0, BOMB_BODY, false);
+        if (bomb != NULL) {
+            bomb->timer = 0;
+        }
+        Actor_Kill(&this->actor);
+    } else {
+        Actor_SetScale(&this->actor, scale);
+    }
 }
 
 void func_80A7CC3C(EnInsect* this, PlayState* play) {
@@ -696,11 +738,11 @@ void func_80A7D460(EnInsect* this, PlayState* play) {
         func_80A7CE60(this);
     } else if (this->unk_314 & 0x10) {
         if (sp40 < 9.0f) {
-            func_80A7CBC8(this);
+            func_80A7CBC8(this); //Digging into soft soil?
         } else if (this->unk_31A <= 0 || this->unk_31C <= 0 ||
                    ((this->unk_314 & 1) && (this->actor.bgCheckFlags & 1) && D_80A7DEB8 >= 4 &&
                     (sp3A == 2 || sp3A == 3))) {
-            func_80A7CBC8(this);
+            func_80A7CBC8(this); //Digging into soft soil
         } else {
             if (sp40 < 900.0f) {
                 this->unk_31C++;
