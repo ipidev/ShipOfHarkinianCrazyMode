@@ -27,6 +27,8 @@ typedef struct EnBili {
     /* 0x0198 */ Vec3s jointTable[EN_BILI_LIMB_MAX];
     /* 0x01B6 */ Vec3s morphTable[EN_BILI_LIMB_MAX];
     /* 0x01D4 */ ColliderCylinder collider;
+    //ipi: Extra ranged attack
+                 ColliderCylinder rangedCollider;
 } EnBili; // size = 0x0220
 
 typedef enum {

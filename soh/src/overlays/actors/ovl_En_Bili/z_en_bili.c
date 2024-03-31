@@ -29,6 +29,9 @@ void EnBili_Die(EnBili* this, PlayState* play);
 void EnBili_Stunned(EnBili* this, PlayState* play);
 void EnBili_Frozen(EnBili* this, PlayState* play);
 
+//ipi: Ranged lightning attack
+void EnBili_CrazyModeDischargeLightning(EnBili* this, PlayState* play);
+
 const ActorInit En_Bili_InitVars = {
     ACTOR_EN_BILI,
     ACTORCAT_ENEMY,
@@ -63,6 +66,27 @@ static ColliderCylinderInit sCylinderInit = {
 };
 
 static CollisionCheckInfoInit2 sColChkInfoInit = { 1, 9, 28, -20, 30 };
+
+//ipi: Extra ranged attack
+static ColliderCylinderInit sRangedAttackCylinderInit = {
+    {
+        COLTYPE_HIT0,
+        AT_ON | AT_TYPE_ENEMY,
+        AC_NONE,
+        OC1_NONE,
+        OC2_NONE,
+        COLSHAPE_CYLINDER,
+    },
+    {
+        ELEMTYPE_UNK0,
+        { 0x00000008, 0x03, 0x08 },
+        { 0x00000000, 0x00, 0x00 },
+        TOUCH_ON | TOUCH_SFX_NONE,
+        BUMP_NONE,
+        OCELEM_ON,
+    },
+    { 60, 80, -40, { 0, 0, 0 } },
+};
 
 typedef enum {
     /* 0x0 */ BIRI_DMGEFF_NONE,
@@ -131,6 +155,13 @@ void EnBili_Init(Actor* thisx, PlayState* play) {
     } else {
         EnBili_SetupSpawnedFlyApart(this);
     }
+
+    //ipi: Setup extra ranged attack
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Collider_InitCylinder(play, &this->rangedCollider);
+        Collider_SetCylinder(play, &this->rangedCollider, &this->actor, &sRangedAttackCylinderInit);
+        this->rangedCollider.base.atFlags &= ~AT_ON;
+    }
 }
 
 void EnBili_Destroy(Actor* thisx, PlayState* play) {
@@ -179,6 +210,16 @@ void EnBili_SetupDischargeLightning(EnBili* this) {
     this->actor.velocity.y = -1.0f;
 }
 
+//ipi: Ranged lightning attack
+void EnBili_SetupCrazyModeDischargeLightning(EnBili* this, PlayState* play) {
+    Animation_PlayLoop(&this->skelAnime, &gBiriDischargeLightningAnim);
+    this->timer = 10;
+    this->actionFunc = EnBili_CrazyModeDischargeLightning;
+    this->actor.velocity.y = -1.0f;
+    this->rangedCollider.base.atFlags |= AT_ON;
+    SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 80, NA_SE_EN_BALINADE_THUNDER);
+}
+
 void EnBili_SetupClimb(EnBili* this) {
     Animation_PlayOnce(&this->skelAnime, &gBiriClimbAnim);
     this->collider.base.atFlags &= ~AT_ON;
@@ -190,11 +231,16 @@ void EnBili_SetupClimb(EnBili* this) {
 void EnBili_SetupApproachPlayer(EnBili* this) {
     this->actor.speedXZ = 1.2f;
     this->actionFunc = EnBili_ApproachPlayer;
+    //ipi: Face player immediately
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->actor.world.rot.y = this->actor.yawTowardsPlayer;
+    }
 }
 
 void EnBili_SetupSetNewHomeHeight(EnBili* this) {
     Animation_PlayLoop(&this->skelAnime, &gBiriDefaultAnim);
-    this->timer = 96;
+    //ipi: Faster!
+    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 16 : 96;
     this->actor.speedXZ = 0.9f;
     this->collider.base.atFlags |= AT_ON;
     this->actionFunc = EnBili_SetNewHomeHeight;
@@ -317,7 +363,9 @@ void EnBili_UpdateFloating(EnBili* this) {
     f32 heightOffset = ((this->actionFunc == EnBili_SetNewHomeHeight) ? 100.0f : 40.0f);
     f32 baseHeight = CLAMP_MIN(this->actor.floorHeight, playerHeight);
 
-    Math_StepToF(&this->actor.home.pos.y, baseHeight + heightOffset, 1.0f);
+    //ipi: Faster!
+    f32 speed = CVarGetInteger("gIpiCrazyMode", 0) ? (sinf(this->timer * (M_PI / 16)) + 1.5f) : 1.0f;
+    Math_StepToF(&this->actor.home.pos.y, baseHeight + heightOffset, speed);
     this->actor.world.pos.y = this->actor.home.pos.y + (sinf(this->timer * (M_PI / 16)) * 3.0f);
 
     // Turn around if touching wall
@@ -345,7 +393,10 @@ void EnBili_FloatIdle(EnBili* this, PlayState* play) {
         this->timer = 32;
     }
 
-    if ((this->actor.xzDistToPlayer < 160.0f) && (fabsf(this->actor.yDistToPlayer) < 45.0f)) {
+    //ipi: Wider attack range in crazy mode
+    f32 maxDistanceHoriz = CVarGetInteger("gIpiCrazyMode", 0) ? 300.0f : 160.0f;
+    f32 maxDistanceVert = CVarGetInteger("gIpiCrazyMode", 0) ? 100.0f : 45.0f;
+    if ((this->actor.xzDistToPlayer < maxDistanceHoriz) && (fabsf(this->actor.yDistToPlayer) < maxDistanceVert)) {
         EnBili_SetupApproachPlayer(this);
     }
 }
@@ -396,6 +447,49 @@ void EnBili_DischargeLightning(EnBili* this, PlayState* play) {
     }
 }
 
+//ipi: Ranged lightning attack
+void EnBili_CrazyModeDischargeLightning(EnBili* this, PlayState* play)
+{
+    static Color_RGBA8 primColor = { 255, 255, 255, 255 };
+    static Color_RGBA8 envColor = { 200, 255, 255, 255 };
+
+    //Spawn larger effects
+    for (s32 i = 0; i < 4; i++) {
+        if (!((this->timer/* + (i << 1)*/) % 4)) {
+            s16 effectYaw = (s16)Rand_CenteredFloat(12288.0f) + (i * 0x4000) + 0x2000;
+            s16 offsetYaw = (s16)Rand_Next();
+            Vec3f effectPos;
+            effectPos.x = this->actor.world.pos.x + (Rand_ZeroOne() * 50.0f * Math_SinS(offsetYaw));
+            effectPos.y = this->actor.world.pos.y + Rand_CenteredFloat(40.0f);
+            effectPos.z = this->actor.world.pos.z + (Rand_ZeroOne() * 50.0f * Math_SinS(offsetYaw));
+            EffectSsLightning_Spawn(play, &effectPos, &primColor, &envColor, 50, effectYaw, 8, 2);
+
+            //Spawn a spark also
+            Vec3f sparkVelocity;
+            VEC_SET(sparkVelocity, 0.0f, 0.0f, 0.0f);
+            effectPos.x = this->actor.world.pos.x + (Rand_ZeroOne() * 70.0f * Math_SinS(offsetYaw));
+            effectPos.y = this->actor.world.pos.y + Rand_CenteredFloat(40.0f);
+            effectPos.z = this->actor.world.pos.z + (Rand_ZeroOne() * 70.0f * Math_SinS(offsetYaw));
+            EffectSsGSpk_SpawnNoAccel(play, &this->actor, &effectPos, &sparkVelocity, &sparkVelocity,
+                &primColor, &envColor, 200, 100);
+        }
+    }
+    SkelAnime_Update(&this->skelAnime);
+    func_8002F974(&this->actor, NA_SE_EN_BIRI_SPARK - SFX_FLAG);
+
+    if (this->timer != 0) {
+        this->timer--;
+    }
+
+    this->actor.velocity.y *= -1.0f;
+    Math_StepToF(&this->actor.speedXZ, 0.0f, 0.5f);
+
+    if ((this->timer == 0) && Animation_OnFrame(&this->skelAnime, 0.0f)) {
+        this->rangedCollider.base.atFlags &= ~AT_ON;
+        EnBili_SetupClimb(this);
+    }
+}
+
 void EnBili_Climb(EnBili* this, PlayState* play) {
     s32 skelAnimeUpdate = SkelAnime_Update(&this->skelAnime);
     f32 curFrame = this->skelAnime.curFrame;
@@ -416,7 +510,10 @@ void EnBili_Climb(EnBili* this, PlayState* play) {
 
 void EnBili_ApproachPlayer(EnBili* this, PlayState* play) {
     SkelAnime_Update(&this->skelAnime);
-    Math_ApproachS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 2, 1820);
+    //ipi: Maintain original behaviour here
+    if (!CVarGetInteger("gIpiCrazyMode", 0)) {
+        Math_ApproachS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 2, 1820);
+    }
 
     if (this->timer != 0) {
         this->timer--;
@@ -428,7 +525,34 @@ void EnBili_ApproachPlayer(EnBili* this, PlayState* play) {
         this->timer = 32;
     }
 
-    if (this->actor.xzDistToPlayer > 200.0f) {
+    //ipi: Glide towards target
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        /*Player* player = GET_PLAYER(play);
+        Math_SmoothStepToF(&this->actor.world.pos.x, player->actor.world.pos.x, 0.05f, 8.0f, 0.1f);
+        Math_SmoothStepToF(&this->actor.home.pos.y, player->actor.world.pos.y, 0.05f, 2.0f, 0.1f);
+        Math_SmoothStepToF(&this->actor.world.pos.z, player->actor.world.pos.z, 0.05f, 8.0f, 0.1f);*/
+        this->actor.speedXZ = 4.0f + (sinf(this->timer * (M_PI / 16)) * 4.5f);
+        Math_ApproachS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 2, (s16)(200.0f * this->actor.speedXZ));
+
+        //Spawn effect
+        static Color_RGBA8 primColor = { 255, 255, 255, 255 };
+        static Color_RGBA8 envColor = { 200, 255, 255, 255 };
+        s16 effectYaw = (s16)Rand_Next();
+        Vec3f effectPos;
+        effectPos.x = Rand_CenteredFloat(5.0f) + this->actor.world.pos.x;
+        effectPos.y = (Rand_ZeroOne() * 5.0f) + this->actor.world.pos.y + 2.5f;
+        effectPos.z = Rand_CenteredFloat(5.0f) + this->actor.world.pos.z;
+        EffectSsLightning_Spawn(play, &effectPos, &primColor, &envColor, 15, effectYaw, 6, 2);
+
+        //Perform shock attack if close enough
+        if (this->actor.xzDistToPlayer < 80.0f && fabsf(this->actor.yDistToPlayer) < 80.0f) {
+            EnBili_SetupCrazyModeDischargeLightning(this, play);
+        }
+    }
+
+    //ipi: Need to support further idle distance here
+    f32 maxDistance = CVarGetInteger("gIpiCrazyMode", 0) ? 350.0f : 200.0f;
+    if (this->actor.xzDistToPlayer > maxDistance) {
         EnBili_SetupFloatIdle(this);
     }
 }
@@ -641,6 +765,15 @@ void EnBili_Update(Actor* thisx, PlayState* play2) {
 
         CollisionCheck_SetOC(play, &play->colChkCtx, &this->collider.base);
         Actor_SetFocus(&this->actor, 0.0f);
+
+        //ipi: Update ranged attack cylinder
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            Collider_UpdateCylinder(&this->actor, &this->rangedCollider);
+
+            if (this->rangedCollider.base.atFlags & AT_ON) {
+                CollisionCheck_SetAT(play, &play->colChkCtx, &this->rangedCollider.base);
+            }
+        }
     }
 }
 
