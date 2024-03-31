@@ -290,9 +290,11 @@ void func_80880484(BgHakaTrap* this, PlayState* play) {
     s32 timer;
 
     if (this->unk_16A) {
-        this->dyna.actor.velocity.y *= 3.0f;
+        //ipi: Fast guillotines are even faster!
+        this->dyna.actor.velocity.y *= CVarGetInteger("gIpiCrazyMode", 0) ? 4.0f : 3.0f;
     } else {
-        this->dyna.actor.velocity.y *= 2.0f;
+        //ipi: Slow guillotines act like fast ones
+        this->dyna.actor.velocity.y *= CVarGetInteger("gIpiCrazyMode", 0) ? 3.0f : 2.0f;
     }
 
     if (this->timer != 0) {
@@ -303,13 +305,21 @@ void func_80880484(BgHakaTrap* this, PlayState* play) {
         Math_StepToF(&this->dyna.actor.world.pos.y, this->dyna.actor.home.pos.y - 185.0f, this->dyna.actor.velocity.y);
     timer = this->timer;
 
-    if ((timer == 10 && !this->unk_16A) || (timer == 13 && this->unk_16A)) {
+    //ipi: Slow guillotines act like fast ones. Fast guillotines are even faster!
+    s16 slowTimerValue = CVarGetInteger("gIpiCrazyMode", 0) ? 13 : 10;
+    s16 fastTimerValue = CVarGetInteger("gIpiCrazyMode", 0) ? 9 : 13;
+    if ((timer == slowTimerValue && !this->unk_16A) || (timer == fastTimerValue && this->unk_16A)) {
         Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EV_GUILLOTINE_BOUND);
     }
 
     if (this->timer == 0) {
         this->dyna.actor.velocity.y = 0.0f;
-        this->timer = (this->unk_16A) ? 10 : 40;
+        //ipi: Slow guillotines act like fast ones. Fast guillotines are even faster!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->timer = (this->unk_16A) ? 8 : 10;
+        } else {
+            this->timer = (this->unk_16A) ? 10 : 40;
+        }
         Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EV_GUILLOTINE_UP);
         this->actionFunc = func_808805C0;
     }
@@ -326,8 +336,10 @@ void func_808805C0(BgHakaTrap* this, PlayState* play) {
         this->timer--;
     }
 
-    if (this->unk_16A) {
-        Math_StepToF(&this->dyna.actor.world.pos.y, this->dyna.actor.home.pos.y, 27.0f);
+    //ipi: Slow guillotines act like fast ones. Fast guillotines are even faster!
+    if (this->unk_16A || CVarGetInteger("gIpiCrazyMode", 0)) {
+        f32 speed = (CVarGetInteger("gIpiCrazyMode", 0) && this->unk_16A) ? 35.0f : 27.0f;
+        Math_StepToF(&this->dyna.actor.world.pos.y, this->dyna.actor.home.pos.y, speed);
     } else {
         if (this->timer > 20) {
             Math_StepToF(&this->dyna.actor.world.pos.y, this->dyna.actor.home.pos.y - 90.0f, 9.0f);
@@ -341,7 +353,12 @@ void func_808805C0(BgHakaTrap* this, PlayState* play) {
     }
 
     if (this->timer == 0) {
-        this->timer = 20;
+        //ipi: Slow guillotines act like fast ones. Fast guillotines are even faster!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->timer = this->unk_16A ? 12 : 20;
+        } else {
+            this->timer = 20;
+        }
         this->dyna.actor.world.pos.y = this->dyna.actor.home.pos.y;
         this->dyna.actor.velocity.y = 0.1f;
         this->actionFunc = func_80880484;
