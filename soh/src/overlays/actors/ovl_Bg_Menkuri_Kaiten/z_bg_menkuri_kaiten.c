@@ -53,7 +53,8 @@ void BgMenkuriKaiten_Update(Actor* thisx, PlayState* play) {
 
     if (!Flags_GetSwitch(play, this->dyna.actor.params) && func_80043590(&this->dyna)) {
         func_8002F974(&this->dyna.actor, NA_SE_EV_ELEVATOR_MOVE - SFX_FLAG);
-        this->dyna.actor.shape.rot.y += 0x80;
+        //ipi: Faster!
+        this->dyna.actor.shape.rot.y += CVarGetInteger("gIpiCrazyMode", 0) ? 0x180 : 0x80;
     }
 }
 
