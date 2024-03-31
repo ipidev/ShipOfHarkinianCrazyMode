@@ -149,7 +149,7 @@ AudioCollection::AudioCollection() {
         SEQUENCE_MAP_ENTRY(NA_SE_SY_KINSTA_MARK_APPEAR,         "Gold Skulltula Token",                     "NA_SE_SY_KINSTA_MARK_APPEAR",    SEQ_SFX,          true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_EN_REDEAD_CRY,                 "Redead Moan",                              "NA_SE_EN_REDEAD_CRY",            SEQ_SFX,          true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_EV_LIGHTNING,                  "Thunder",                                  "NA_SE_EV_LIGHTNING",             SEQ_SFX,          true,     true),
-        SEQUENCE_MAP_ENTRY(NA_SE_OC_ABYSS,                      "Cartoon Fall",                             "NA_SE_OC_ABYSS",                 SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_OC_ABYSS,                      /* ipi: Fix name */"Void Out",              "NA_SE_OC_ABYSS",                 SEQ_SFX,          true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_EN_FLAME_LAUGH,                "Flare Dancer Laugh",                       "NA_SE_EN_FLAME_LAUGH",           SEQ_SFX,          true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_EN_AWA_BREAK,                  "Shabom Pop",                               "NA_SE_EN_AWA_BREAK",             SEQ_SFX,          true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_EN_SHADEST_TAIKO_HIGH,         "Bongo Bongo High",                         "NA_SE_EN_SHADEST_TAIKO_HIGH",    SEQ_SFX,          true,     true),
@@ -180,7 +180,35 @@ AudioCollection::AudioCollection() {
         SEQUENCE_MAP_ENTRY(NA_SE_SY_FSEL_CLOSE,                 "File Select Back",                         "NA_SE_SY_FSEL_CLOSE",            SEQ_SFX,          true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_IT_BOMB_EXPLOSION,             "Bomb Explosion",                           "NA_SE_IT_BOMB_EXPLOSION",        SEQ_SFX,          true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_EV_CHICKEN_CRY_A,              "Chicken Cry",                              "NA_SE_EV_CHICKEN_CRY_A",         SEQ_SFX,          true,     true),
-
+        //ipi: Some more additions
+        SEQUENCE_MAP_ENTRY(NA_SE_IT_BOMB_UNEXPLOSION,           "Bomb Fizzled Fuse",                        "NA_SE_IT_BOMB_UNEXPLOSION",      SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_IT_SWORD_STRIKE,               "Sword Strike",                             "NA_SE_IT_SWORD_STRIKE",          SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_IT_EXPLOSION_FRAME,            "Fire Arrow Impact",                        "NA_SE_IT_EXPLOSION_FRAME",       SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_IT_EXPLOSION_ICE,              "Ice Arrow Impact",                         "NA_SE_IT_EXPLOSION_ICE",         SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_IT_MAJIN_SWORD_BROKEN,         "Giant's Knife Break",                      "NA_SE_IT_MAJIN_SWORD_BROKEN",    SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_IT_HAND_CLAP,                  "Clap",                                     "NA_SE_IT_HAND_CLAP",             SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EV_SLIDE_DOOR_OPEN,            "Sliding Door Opening",                     "NA_SE_EV_SLIDE_DOOR_OPEN",       SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EV_METALDOOR_SLIDE - SFX_FLAG, "Metallic Gate Opening",                    "NA_SE_EV_METALDOOR_SLIDE",       SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EV_SHIP_BELL,                  "Bell",                                     "NA_SE_EV_SHIP_BELL",             SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_IT_SCOOP_UP_WATER,             "Splash",                                   "NA_SE_IT_SCOOP_UP_WATER",        SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EV_CHAIN_KEY_UNLOCK,           "Key Door Unlocked",                        "NA_SE_EV_CHAIN_KEY_UNLOCK",      SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EV_CHAIN_KEY_UNLOCK_B,         "Boss Key Door Unlocked",                   "NA_SE_EV_CHAIN_KEY_UNLOCK_B",    SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EV_ICE_MELT,                   "Melting Ice",                              "NA_SE_EV_ICE_MELT",              SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_DODO_J_FIRE - SFX_FLAG,     "Dodongo Fire Breath",                      "NA_SE_EN_DODO_J_FIRE",           SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_DODO_M_CRY,                 "Baby Dodongo Cry",                         "NA_SE_EN_DODO_M_CRY",            SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_GOMA_DAM2,                  "Gohma Cry",                                "NA_SE_EN_GOMA_DAM2",             SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_RIZA_ATTACK,                "Lizalfos Attack",                          "NA_SE_EN_RIZA_ATTACK",           SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_RIZA_DAMAGE,                "Lizalfos Hurt",                            "NA_SE_EN_RIZA_DAMAGE",           SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_RIZA_DEAD,                  "Lizalfos Dying",                           "NA_SE_EN_RIZA_DEAD",             SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_STAL_WARAU,                 "Stalfos Laughing",                         "NA_SE_EN_STAL_WARAU",            SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_STAL_DAMAGE,                "Stalfos Hurt",                             "NA_SE_EN_STAL_DAMAGE",           SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_STAL_DEAD,                  "Stalfos Dying",                            "NA_SE_EN_STAL_DEAD",             SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_WOLFOS_APPEAR,              "Wolfos Appear",                            "NA_SE_EN_WOLFOS_APPEAR",         SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_WOLFOS_CRY,                 "Wolfos Howl",                              "NA_SE_EN_WOLFOS_CRY",            SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_WOLFOS_ATTACK,              "Wolfos Attack",                            "NA_SE_EN_WOLFOS_ATTACK",         SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_WOLFOS_DAMAGE,              "Wolfos Hurt",                              "NA_SE_EN_WOLFOS_DAMAGE",         SEQ_SFX,          true,     true),
+        SEQUENCE_MAP_ENTRY(NA_SE_EN_WOLFOS_DEAD,                "Wolfos Dying",                             "NA_SE_EN_WOLFOS_DEAD",           SEQ_SFX,          true,     true),
+        
         // SEQ_VOICE
         SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_SWORD_N,                 "Adult Link - Slash",                       "NA_SE_VO_LI_SWORD_N",            SEQ_VOICE,        true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_SWORD_L,                 "Adult Link - Big Slash",                   "NA_SE_VO_LI_SWORD_L",            SEQ_VOICE,        true,     true),
@@ -290,6 +318,11 @@ AudioCollection::AudioCollection() {
         SEQUENCE_MAP_ENTRY(NA_SE_VO_KZ_MOVE,                    "King Zora - Mweep!",                       "NA_SE_VO_KZ_MOVE",               SEQ_VOICE,        true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_VO_NB_LAUGH,                   "Navi - Hello!",                            "NA_SE_VO_NB_LAUGH",              SEQ_VOICE,        true,     true),
         SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_DRINK - SFX_FLAG,        "Adult Link - Drinking",                    "NA_SE_VO_LI_DRINK",              SEQ_VOICE,        true,     false),
+        //ipi: Some more additions
+        SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_GROAN,                   "Adult Link - Groan (Unused)",              "NA_SE_VO_LI_GROAN",              SEQ_VOICE,        true,     false),
+        SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_ELECTRIC_SHOCK_LV,       "Adult Link - Electrocuted (Unused)",       "NA_SE_VO_LI_ELECTRIC_SHOCK_LV",  SEQ_VOICE,        true,     false),
+        SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_GROAN_KID,               "Child Link - Groan (Unused)",              "NA_SE_VO_LI_GROAN_KID",          SEQ_VOICE,        true,     false),
+        SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_ELECTRIC_SHOCK_LV_KID,   "Child Link - Electrocuted (Unused)",       "NA_SE_VO_LI_ELECTRIC_SHOCK_LV_KID", SEQ_VOICE,     true,     false),
 
         //SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_DRINK, "Adult Link - Drinking",                        "NA_SE_VO_LI_DRINK",                    SEQ_VOICE, true, false), // Doesn't work due to SFX_FLAG
         //SEQUENCE_MAP_ENTRY(NA_SE_VO_LI_DRINK_KID, "Child Link - Drinking",                    "NA_SE_VO_LI_DRINK_KID",                SEQ_VOICE, true, false), // Doesn't work due to SFX_FLAG

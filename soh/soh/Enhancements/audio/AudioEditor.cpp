@@ -109,6 +109,7 @@ void RandomizeGroup(SeqType type) {
             const int randomValue = values.back();
             CVarSetInteger(cvarKey.c_str(), randomValue);
             values.pop_back();
+            if (!values.size()) break;
         }
     }
 }
