@@ -248,7 +248,8 @@ void EnHonotrap_EyeIdle(EnHonotrap* this, PlayState* play) {
 void EnHonotrap_SetupEyeOpen(EnHonotrap* this) {
     this->actionFunc = EnHonotrap_EyeOpen;
     Actor_SetColorFilter(&this->actor, 0x4000, 0xFF, 0, 0x28);
-    this->timer = 30;
+    //ipi: Shoot three flames per volley in crazy mode
+    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 50 : 30;
     Audio_PlayActorSound2(&this->actor, NA_SE_EV_RED_EYE);
 }
 
@@ -274,6 +275,15 @@ void EnHonotrap_SetupEyeAttack(EnHonotrap* this) {
 }
 
 void EnHonotrap_EyeAttack(EnHonotrap* this, PlayState* play) {
+     //ipi: Shoot three flames per volley in crazy mode
+    if (CVarGetInteger("gIpiCrazyMode", 0) && (this->timer == 40 || this->timer == 30)) {
+        f32 sin = Math_SinS(this->actor.shape.rot.y);
+        f32 cos = Math_CosS(this->actor.shape.rot.y);
+        Actor_SpawnAsChild(&play->actorCtx, &this->actor, play, ACTOR_EN_HONOTRAP,
+                           (sin * 12.0f) + this->actor.home.pos.x, this->actor.home.pos.y - 10.0f,
+                           (cos * 12.0f) + this->actor.home.pos.z, this->actor.home.rot.x, this->actor.home.rot.y,
+                           this->actor.home.rot.z, HONOTRAP_FLAME_MOVE);
+    }
     if (this->timer <= 0) {
         EnHonotrap_SetupEyeClose(this);
     }
@@ -319,7 +329,8 @@ void EnHonotrap_SetupFlameDrop(EnHonotrap* this) {
 }
 
 void EnHonotrap_FlameDrop(EnHonotrap* this, PlayState* play) {
-    if ((this->collider.cyl.base.atFlags & AT_HIT) || (this->timer <= 0)) {
+    //ipi: Dampe's flames don't disappear over time in crazy mode
+    if ((this->collider.cyl.base.atFlags & AT_HIT) || (this->timer <= 0 && !CVarGetInteger("gIpiCrazyMode", 0))) {
         if ((this->collider.cyl.base.atFlags & AT_HIT) && !(this->collider.cyl.base.atFlags & AT_BOUNCED)) {
             func_8002F71C(play, &this->actor, 5.0f, this->actor.yawTowardsPlayer, 0.0f);
         }
