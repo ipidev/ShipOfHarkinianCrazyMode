@@ -87,9 +87,17 @@ void MagicFire_Init(Actor* thisx, PlayState* play) {
     Collider_InitCylinder(play, &this->collider);
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
     Collider_UpdateCylinder(&this->actor, &this->collider);
-    this->actor.update = MagicFire_UpdateBeforeCast;
-    this->actionTimer = 20;
-    this->actor.room = -1;
+    //ipi: Non-zero param means enemy-owned - jump straight to expanding behaviour
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params != 0) {
+        this->actor.update = MagicFire_Update;
+        this->actionTimer = 0;
+        this->actor.room = -1;
+        this->actor.flags &= ~ACTOR_FLAG_NO_FREEZE_OCARINA;
+    } else {
+        this->actor.update = MagicFire_UpdateBeforeCast;
+        this->actionTimer = 20;
+        this->actor.room = -1;
+    }
 }
 
 void MagicFire_Destroy(Actor* thisx, PlayState* play) {
@@ -119,16 +127,19 @@ void MagicFire_Update(Actor* thisx, PlayState* play) {
     Player* player = GET_PLAYER(play);
     s32 pad;
 
-    this->actor.world.pos = player->actor.world.pos;
-    if ((play->msgCtx.msgMode == MSGMODE_OCARINA_CORRECT_PLAYBACK) ||
-        (play->msgCtx.msgMode == MSGMODE_SONG_PLAYED)) {
-        Actor_Kill(&this->actor);
-        return;
-    }
-    if (this->action == DF_ACTION_EXPAND_SLOWLY) {
-        this->collider.info.toucher.damage = this->actionTimer + 25;
-    } else if (this->action == DF_ACTION_STOP_EXPANDING) {
-        this->collider.info.toucher.damage = this->actionTimer;
+     //ipi: Non-zero param means enemy-owned - don't attach to player or change damage
+    if (this->actor.params == 0) {
+        this->actor.world.pos = player->actor.world.pos;
+        if ((play->msgCtx.msgMode == MSGMODE_OCARINA_CORRECT_PLAYBACK) ||
+            (play->msgCtx.msgMode == MSGMODE_SONG_PLAYED)) {
+            Actor_Kill(&this->actor);
+            return;
+        }
+        if (this->action == DF_ACTION_EXPAND_SLOWLY) {
+            this->collider.info.toucher.damage = this->actionTimer + 25;
+        } else if (this->action == DF_ACTION_STOP_EXPANDING) {
+            this->collider.info.toucher.damage = this->actionTimer;
+        }
     }
     Collider_UpdateCylinder(&this->actor, &this->collider);
     this->collider.dim.radius = (this->actor.scale.x * 325.0f);

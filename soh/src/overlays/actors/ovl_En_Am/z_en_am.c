@@ -9,6 +9,9 @@
 #include "overlays/actors/ovl_En_Bom/z_en_bom.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
+//ipi: Din's FIre
+#include "overlays/actors/ovl_Magic_Fire/z_magic_fire.h"
+
 #define FLAGS (ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_HOSTILE | ACTOR_FLAG_UPDATE_WHILE_CULLED | ACTOR_FLAG_CAN_PRESS_SWITCH)
 
 void EnAm_Init(Actor* thisx, PlayState* play);
@@ -28,6 +31,9 @@ void EnAm_Cooldown(EnAm* this, PlayState* play);
 void EnAm_Ricochet(EnAm* this, PlayState* play);
 void EnAm_Stunned(EnAm* this, PlayState* play);
 void EnAm_RecoilFromDamage(EnAm* this, PlayState* play);
+
+//ipi: Extra exploding behaviour involving Din's Fire
+void EnAm_CrazyModeExplode(EnAm* this, PlayState* play);
 
 typedef enum {
     /* 00 */ AM_BEHAVIOR_NONE,
@@ -794,7 +800,8 @@ void EnAm_UpdateDamage(EnAm* this, PlayState* play) {
     s32 pad;
     Vec3f sparkPos;
 
-    if (this->deathTimer == 0) {
+    //ipi: Also ignore damage while exploding
+    if (this->deathTimer == 0 && this->actionFunc != EnAm_CrazyModeExplode) {
         if (this->blockCollider.base.acFlags & AC_BOUNCED) {
             this->blockCollider.base.acFlags &= ~(AC_HIT | AC_BOUNCED);
             this->hurtCollider.base.acFlags &= ~AC_HIT;
@@ -837,6 +844,50 @@ void EnAm_UpdateDamage(EnAm* this, PlayState* play) {
     }
 }
 
+//ipi: Extra exploding behaviour involving Din's Fire
+void EnAm_CrazyModeExplode(EnAm* this, PlayState* play) {
+    static Vec3f sZero = { 0.0f, 0.0f, 0.0f };
+
+    //Step timer
+    this->unk_258++;
+    if (this->unk_258 < 53) {
+        //Shake up and down
+        this->dyna.actor.velocity.y = this->unk_258 & 2 ? 2.0f : -2.0f;
+
+        //Spawn explosion effect
+        if ((this->unk_258 & 3) == 1) {
+            f32 maxRadius = this->unk_258 * 2.0f;
+            maxRadius = CLAMP_MIN(maxRadius, 60.0f);
+            f32 chosenRadius = Rand_ZeroOne() * maxRadius;
+            s16 chosenAngle = (s16)Rand_Next();
+            Vec3f spawnPos;
+            spawnPos.x = this->dyna.actor.world.pos.x + (Math_SinS(chosenAngle) * chosenRadius);
+            spawnPos.z = this->dyna.actor.world.pos.z + (Math_CosS(chosenAngle) * chosenRadius);
+            chosenAngle = (s16)Rand_Next();
+            spawnPos.y = this->dyna.actor.world.pos.y + fabsf(Math_SinS(chosenAngle) * chosenRadius);
+            EffectSsBomb2_SpawnLayered(play, &spawnPos, &sZero, &sZero, 100, 10);
+            Audio_PlayActorSound2(&this->dyna.actor, NA_SE_IT_BOMB_EXPLOSION);
+        }
+        //Flash red rapidly
+        if ((this->unk_258 & 2) == 0) {
+            Actor_SetColorFilter(&this->dyna.actor, 0x4000, 255, 0, 2);
+        }
+    } else {
+        //Spawn final explosion
+        EnBom* bomb = (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->dyna.actor.world.pos.x,
+            this->dyna.actor.world.pos.y, this->dyna.actor.world.pos.z, 0, 0, 4, BOMB_BODY, false);
+        if (bomb != NULL) {
+            bomb->timer = 0;
+        }
+        //Normal death behaviour
+        SoundSource_PlaySfxAtFixedWorldPos(play, &this->dyna.actor.world.pos, 20, NA_SE_IT_BOMB_EXPLOSION);
+        Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EN_AMOS_DEAD);
+        Item_DropCollectibleRandom(play, &this->dyna.actor, &this->dyna.actor.world.pos, 0xA0);
+        GameInteractor_ExecuteOnEnemyDefeat(&this->dyna.actor);
+        Actor_Kill(&this->dyna.actor);
+    }
+}
+
 void EnAm_Update(Actor* thisx, PlayState* play) {
     static Vec3f zeroVec = { 0.0f, 0.0f, 0.0f };
     static Color_RGBA8 dustPrimColor = { 150, 150, 150, 255 };
@@ -864,32 +915,50 @@ void EnAm_Update(Actor* thisx, PlayState* play) {
             this->deathTimer--;
 
             if (this->deathTimer == 0) {
-                dustPosScale = play->gameplayFrames * 10;
+                ///ipi: Initialise extra exploding behaviour involving Din's Fire
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    MagicFire* dins = Actor_Spawn(&play->actorCtx, play, ACTOR_MAGIC_FIRE, this->dyna.actor.world.pos.x,
+                        this->dyna.actor.world.pos.y, this->dyna.actor.world.pos.z, 0, 0, 0, 1, false);
+                    if (dins != NULL) {
+                        //Setup fire damage
+                        dins->collider.base.atFlags = AT_ON | AT_TYPE_PLAYER | AT_TYPE_ENEMY;
+                        dins->collider.info.toucher.effect = 0x01;
+                        dins->collider.info.toucher.damage = 0x10;
+                    }
+                    this->unk_258 = 0; //Timer
+                    this->dyna.actor.speedXZ = 0.0f;
+                    this->dyna.actor.velocity.y = 2.0f;
+                    this->dyna.actor.gravity = 0.0f;
+                    Animation_PlayLoopSetSpeed(&this->skelAnime, &gArmosDamagedAnim, 0.0f);
+                    EnAm_SetupAction(this, EnAm_CrazyModeExplode);
+                } else {
+                    dustPosScale = play->gameplayFrames * 10;
 
-                EnAm_SpawnEffects(this, play);
-                bomb =
-                    (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->dyna.actor.world.pos.x,
-                                        this->dyna.actor.world.pos.y, this->dyna.actor.world.pos.z, 0, 0, 2, BOMB_BODY, true);
-                if (bomb != NULL) {
-                    bomb->timer = 0;
+                    EnAm_SpawnEffects(this, play);
+                    bomb =
+                        (EnBom*)Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BOM, this->dyna.actor.world.pos.x,
+                                            this->dyna.actor.world.pos.y, this->dyna.actor.world.pos.z, 0, 0, 2, BOMB_BODY, true);
+                    if (bomb != NULL) {
+                        bomb->timer = 0;
+                    }
+
+                    Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EN_AMOS_DEAD);
+                    Item_DropCollectibleRandom(play, &this->dyna.actor, &this->dyna.actor.world.pos, 0xA0);
+
+                    for (i = 9; i >= 0; i--) {
+                        dustPos.x = (sinf(dustPosScale) * 7.0f) + this->dyna.actor.world.pos.x;
+                        dustPos.y = (Rand_CenteredFloat(10.0f) * 6.0f) + (this->dyna.actor.world.pos.y + 40.0f);
+                        dustPos.z = (cosf(dustPosScale) * 7.0f) + this->dyna.actor.world.pos.z;
+
+                        func_8002836C(play, &dustPos, &zeroVec, &zeroVec, &dustPrimColor, &dustEnvColor, 200, 45, 12);
+                        dustPosScale += 60.0f;
+                    }
+                    
+                    GameInteractor_ExecuteOnEnemyDefeat(thisx);
+
+                    Actor_Kill(&this->dyna.actor);
+                    return;
                 }
-
-                Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EN_AMOS_DEAD);
-                Item_DropCollectibleRandom(play, &this->dyna.actor, &this->dyna.actor.world.pos, 0xA0);
-
-                for (i = 9; i >= 0; i--) {
-                    dustPos.x = (sinf(dustPosScale) * 7.0f) + this->dyna.actor.world.pos.x;
-                    dustPos.y = (Rand_CenteredFloat(10.0f) * 6.0f) + (this->dyna.actor.world.pos.y + 40.0f);
-                    dustPos.z = (cosf(dustPosScale) * 7.0f) + this->dyna.actor.world.pos.z;
-
-                    func_8002836C(play, &dustPos, &zeroVec, &zeroVec, &dustPrimColor, &dustEnvColor, 200, 45, 12);
-                    dustPosScale += 60.0f;
-                }
-                
-                GameInteractor_ExecuteOnEnemyDefeat(thisx);
-
-                Actor_Kill(&this->dyna.actor);
-                return;
             }
 
             if ((this->deathTimer % 4) == 0) {
@@ -904,6 +973,9 @@ void EnAm_Update(Actor* thisx, PlayState* play) {
     Collider_UpdateCylinder(&this->dyna.actor, &this->hurtCollider);
     Collider_UpdateCylinder(&this->dyna.actor, &this->blockCollider);
     CollisionCheck_SetOC(play, &play->colChkCtx, &this->hurtCollider.base);
+
+    //ipi: No need for anything below when exploding
+    if (this->actionFunc == EnAm_CrazyModeExplode) return;
 
     if (this->dyna.actor.params != ARMOS_STATUE) {
         Actor_SetFocus(&this->dyna.actor, this->dyna.actor.scale.x * 4500.0f);
