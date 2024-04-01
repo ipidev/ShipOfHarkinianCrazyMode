@@ -215,13 +215,15 @@ void func_80A56614(EnHeishi4* this, PlayState* play) {
 }
 
 void func_80A5673C(EnHeishi4* this, PlayState* play) {
-    if (Flags_GetEventChkInf(EVENTCHKINF_PULLED_MASTER_SWORD_FROM_PEDESTAL)) {
+    //ipi: Allow the dying guard to always spawn
+    if (Flags_GetEventChkInf(EVENTCHKINF_PULLED_MASTER_SWORD_FROM_PEDESTAL) && !CVarGetInteger("gIpiCrazyMode", 0)) {
         osSyncPrintf(VT_FGCOL(YELLOW) " ☆☆☆☆☆ マスターソード祝入手！ ☆☆☆☆☆ \n" VT_RST);
         Actor_Kill(&this->actor);
         return;
     }
     this->unk_284 = 0;
-    if (Flags_GetEventChkInf(EVENTCHKINF_ZELDA_FLED_HYRULE_CASTLE)) {
+    //ipi: Allow the dying guard to always spawn
+    if (Flags_GetEventChkInf(EVENTCHKINF_ZELDA_FLED_HYRULE_CASTLE) || CVarGetInteger("gIpiCrazyMode", 0)) {
         if (!Flags_GetInfTable(INFTABLE_6C)) {
             f32 frames = Animation_GetLastFrame(&gEnHeishiDyingGuardAnim_00C444);
             Animation_Change(&this->skelAnime, &gEnHeishiDyingGuardAnim_00C444, 1.0f, 0.0f, (s16)frames, ANIMMODE_LOOP,
@@ -231,9 +233,21 @@ void func_80A5673C(EnHeishi4* this, PlayState* play) {
             this->unk_284 = 1;
             osSyncPrintf(VT_FGCOL(YELLOW) " ☆☆☆☆☆ デモ開始！ ☆☆☆☆☆ \n" VT_RST);
         } else {
-            this->actor.textId = 0x7008;
-            this->unk_282 = TEXT_STATE_DONE;
-            osSyncPrintf(VT_FGCOL(BLUE) " ☆☆☆☆☆ 返事なし ☆☆☆☆☆ \n" VT_RST);
+            //ipi: Explode if already spawned, otherwise remove the guard
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                //Set to different value if guard is alive upon entering scene
+                if (this->unk_282 != TEXT_STATE_NONE) {
+                    static Vec3f sZero = { 0.0f, 0.0f, 0.0f };
+                    EffectSsBomb2_SpawnLayered(play, &this->actor.world.pos, &sZero, &sZero, 100, 20);
+                    EffectSsDeadSound_SpawnStationary(play, &this->actor.world.pos, NA_SE_IT_BOMB_EXPLOSION,
+                        true, 1, 20);
+                }
+                Actor_Kill(&this->actor);
+            } else {
+                this->actor.textId = 0x7008;
+                this->unk_282 = TEXT_STATE_DONE;
+                osSyncPrintf(VT_FGCOL(BLUE) " ☆☆☆☆☆ 返事なし ☆☆☆☆☆ \n" VT_RST);
+            }
         }
         this->actionFunc = func_80A56874;
     } else {
@@ -267,7 +281,14 @@ void func_80A56900(EnHeishi4* this, PlayState* play) {
 void func_80A56994(EnHeishi4* this, PlayState* play) {
     SkelAnime_Update(&this->skelAnime);
     func_80038290(play, &this->actor, &this->unk_260, &this->unk_266, this->actor.focus.pos);
-    if ((this->unk_282 == Message_GetState(&play->msgCtx)) && Message_ShouldAdvance(play)) {
+    //ipi: Text replacement causes Message_GetState to return TEXT_STATE_DONE instead of TEXT_STATE_EVENT
+    u8 hasFinishedText;
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        hasFinishedText = (Message_GetState(&play->msgCtx) == TEXT_STATE_DONE && Message_ShouldAdvance(play));
+    } else {
+        hasFinishedText = (this->unk_282 == Message_GetState(&play->msgCtx) && Message_ShouldAdvance(play));
+    }
+    if (hasFinishedText) {
         Message_CloseTextbox(play);
         Flags_SetInfTable(INFTABLE_6C);
         func_8002DF54(play, NULL, 8);
@@ -290,6 +311,24 @@ void func_80A56ACC(EnHeishi4* this, PlayState* play) {
     if (this->unk_288 <= currentFrame) {
         func_8002DF54(play, NULL, 7);
         this->actionFunc = func_80A5673C;
+    }
+
+    //ipi: Jack's having a piss!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        static Vec3f sGravity = { 0.0f, -0.5f, 0.0f };
+        static Color_RGBA8 sPrimColor = { 255, 200, 0, 255 };
+        static Color_RGBA8 sEnvColor = { 255, 200, 0, 255 };
+
+        //Speed is based on animation progress
+        f32 strengthScalar = Math_SinF((currentFrame / this->unk_288) * M_PI);
+        f32 speed = 8.0f * strengthScalar;
+        speed = CLAMP(speed, 1.0f, 6.0f);
+        Vec3f velocity;
+        velocity.x = 0.0f;
+        velocity.y = speed * (1.0f + Rand_CenteredFloat(0.1f));
+        velocity.z = speed * (1.0f + Rand_CenteredFloat(0.1f));
+        EffectSsDtBubble_SpawnCustomColor(play, &this->actor.world.pos, &velocity, &sGravity,
+            &sPrimColor, &sEnvColor, 75, 30, 0);
     }
 }
 

@@ -187,4 +187,10 @@ extern "C" void OTRMessage_Init()
         CustomMessage("Hey! Hey!&You can't take the rod out of here!&I'm serious!^Do you want to quit?&\x1B&%gYes&No%w",
                       "Hey! Hey!&Du kannst die Angel doch nicht&einfach mitnehmen!&Ganz im Ernst!^Möchtest du aufhören?&\x1B&%gJa&Nein%w", //TODO Used AI translation as placeholder
                       "Holà! Holà!&Les cannes ne sortent pas d'ici!&Je suis sérieux!^Voulez-vous arrêter?&\x1B&%gOui&Non%w")); //TODO Used AI translation as placeholder
+    //ipi: Replace dying guard text
+    CustomMessageManager::Instance->CreateMessage(
+        customMessageTableID, TEXT_BACK_ALLEY_DYING_GUARD_FIRST,
+        CustomMessage("Jack's having a piss!",
+                      "Jack macht eine Pisse!",
+                      "Jack pisse!"));
 }

@@ -71,6 +71,8 @@ typedef enum {
     TEXT_BEAN_SALESMAN_SET_A_BEAN_TO_C = 0x406A,
     TEXT_BEAN_SALESMAN_SOLD_OUT = 0x406B,
     TEXT_BEAN_SALESMAN_WANT_TO_PLANT = 0x406C,
+    //ipi: Additional text replacements
+    TEXT_BACK_ALLEY_DYING_GUARD_FIRST = 0x7007,
 } TextIDs;
 
 #ifdef __cplusplus
