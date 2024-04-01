@@ -145,6 +145,10 @@ void ObjTsubo_Init(Actor* thisx, PlayState* play) {
         ObjTsubo_SetupWaitForObject(this);
         osSyncPrintf("(dungeon keep 壷)(arg_data 0x%04x)\n", this->actor.params);
     }
+    //ipi: The pot in Link's room now always spawns a Deku Shield
+    if (play->sceneNum == SCENE_LINKS_HOUSE) {
+        this->actor.params = ITEM00_SHIELD_DEKU;
+    }
 }
 
 void ObjTsubo_Destroy(Actor* thisx, PlayState* play2) {

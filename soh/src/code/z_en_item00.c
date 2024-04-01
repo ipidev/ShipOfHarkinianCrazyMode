@@ -449,7 +449,7 @@ void EnItem00_Init(Actor* thisx, PlayState* play) {
             this->scale = 0.01f;
             break;
         case ITEM00_SHIELD_DEKU:
-            EnItem00_SetObjectDependency(this, play, OBJECT_GI_SHIELD_1);
+            //EnItem00_SetObjectDependency(this, play, OBJECT_GI_SHIELD_1); ipi: Ignore dependencies
             Actor_SetScale(&this->actor, 0.5f);
             this->scale = 0.5f;
             yOffset = 0.0f;
@@ -457,7 +457,7 @@ void EnItem00_Init(Actor* thisx, PlayState* play) {
             this->actor.world.rot.x = 0x4000;
             break;
         case ITEM00_SHIELD_HYLIAN:
-            EnItem00_SetObjectDependency(this, play, OBJECT_GI_SHIELD_2);
+            //EnItem00_SetObjectDependency(this, play, OBJECT_GI_SHIELD_2); ipi: Ignore dependencies
             Actor_SetScale(&this->actor, 0.5f);
             this->scale = 0.5f;
             yOffset = 0.0f;
@@ -466,7 +466,7 @@ void EnItem00_Init(Actor* thisx, PlayState* play) {
             break;
         case ITEM00_TUNIC_ZORA:
         case ITEM00_TUNIC_GORON:
-            EnItem00_SetObjectDependency(this, play, OBJECT_GI_CLOTHES);
+            //EnItem00_SetObjectDependency(this, play, OBJECT_GI_CLOTHES); ipi: Ignore dependencies
             Actor_SetScale(&this->actor, 0.5f);
             this->scale = 0.5f;
             yOffset = 0.0f;
