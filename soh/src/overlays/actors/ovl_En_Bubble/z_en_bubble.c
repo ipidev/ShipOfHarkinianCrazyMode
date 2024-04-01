@@ -68,11 +68,101 @@ static CollisionCheckInfoInit2 sColChkInfoInit2 = {
     1, 2, 25, 25, MASS_IMMOVABLE,
 };
 
+//ipi: Larger sizes of bubble - middle size
+static ColliderJntSphElementInit sCrazyModeMidJntSphElementsInit[2] = {
+    {
+        {
+            ELEMTYPE_UNK0,
+            { 0x00000000, 0x00, 0x08 },
+            { 0xFFCFD753, 0x00, 0x00 },
+            TOUCH_NONE,
+            BUMP_ON,
+            OCELEM_ON,
+        },
+        { 0, { { 0, 0, 0 }, 32 }, 100 },
+    },
+    {
+        {
+            ELEMTYPE_UNK0,
+            { 0x00000000, 0x00, 0x00 },
+            { 0x00002824, 0x00, 0x00 },
+            TOUCH_NONE,
+            BUMP_ON | BUMP_NO_AT_INFO | BUMP_NO_DAMAGE | BUMP_NO_SWORD_SFX | BUMP_NO_HITMARK,
+            OCELEM_NONE,
+        },
+        { 0, { { 0, 0, 0 }, 32 }, 100 },
+    },
+};
+
+static ColliderJntSphInit sCrazyModeMidJntSphInit = {
+    {
+        COLTYPE_HIT6,
+        AT_ON | AT_TYPE_ENEMY,
+        AC_ON | AC_TYPE_PLAYER,
+        OC1_ON | OC1_TYPE_ALL,
+        OC2_TYPE_1,
+        COLSHAPE_JNTSPH,
+    },
+    2,
+    sCrazyModeMidJntSphElementsInit,
+};
+
+static CollisionCheckInfoInit2 sCrazyModeMidColChkInfoInit2 = {
+    1, 4, 50, 50, MASS_IMMOVABLE,
+};
+
+//ipi: Larger sizes of bubble - largest size
+static ColliderJntSphElementInit sCrazyModeBigJntSphElementsInit[2] = {
+    {
+        {
+            ELEMTYPE_UNK0,
+            { 0x00000000, 0x00, 0x10 },
+            { 0xFFCFD753, 0x00, 0x00 },
+            TOUCH_NONE,
+            BUMP_ON,
+            OCELEM_ON,
+        },
+        { 0, { { 0, 0, 0 }, 48 }, 100 },
+    },
+    {
+        {
+            ELEMTYPE_UNK0,
+            { 0x00000000, 0x00, 0x00 },
+            { 0x00002824, 0x00, 0x00 },
+            TOUCH_NONE,
+            BUMP_ON | BUMP_NO_AT_INFO | BUMP_NO_DAMAGE | BUMP_NO_SWORD_SFX | BUMP_NO_HITMARK,
+            OCELEM_NONE,
+        },
+        { 0, { { 0, 0, 0 }, 48 }, 100 },
+    },
+};
+
+static ColliderJntSphInit sCrazyModeBigJntSphInit = {
+    {
+        COLTYPE_HIT6,
+        AT_ON | AT_TYPE_ENEMY,
+        AC_ON | AC_TYPE_PLAYER,
+        OC1_ON | OC1_TYPE_ALL,
+        OC2_TYPE_1,
+        COLSHAPE_JNTSPH,
+    },
+    2,
+    sCrazyModeBigJntSphElementsInit,
+};
+
+static CollisionCheckInfoInit2 sCrazyModeBigColChkInfoInit2 = {
+    1, 8, 75, 75, MASS_IMMOVABLE,
+};
+
 static Vec3f sEffectAccel = { 0.0f, -0.5f, 0.0f };
 
 static Color_RGBA8 sEffectPrimColor = { 255, 255, 255, 255 };
 
 static Color_RGBA8 sEffectEnvColor = { 150, 150, 150, 0 };
+
+//ipi: Speeds per size of bubble
+static f32 sCrazyModeBubbleSpeedHigh[] = { 1.2f, 5.0f, 12.0f };
+static f32 sCrazyModeBubbleSpeedLow[] = { 1.0f, 4.0f, 8.0f };
 
 void EnBubble_SetDimensions(EnBubble* this, f32 dim) {
     f32 a;
@@ -148,7 +238,10 @@ s32 EnBubble_Explosion(EnBubble* this, PlayState* play) {
         EffectSsDtBubble_SpawnCustomColor(play, &effectPos, &effectVel, &effectAccel, &sEffectPrimColor,
                                           &sEffectEnvColor, Rand_S16Offset(100, 50), 0x19, 0);
     }
-    Item_DropCollectibleRandom(play, NULL, &this->actor.world.pos, 0x50);
+    //ipi: Only smallest bubbles spawn collectibles
+    if (!CVarGetInteger("gIpiCrazyMode", 0) || this->actor.params >= 2) {
+        Item_DropCollectibleRandom(play, NULL, &this->actor.world.pos, 0x50);
+    }
     this->actor.flags &= ~ACTOR_FLAG_TARGETABLE;
     return Rand_S16Offset(90, 60);
 }
@@ -228,13 +321,15 @@ void EnBubble_Fly(EnBubble* this, PlayState* play) {
     EnBubble_Vec3fNormalize(&sp54);
 
     sp78.x = this->actor.world.pos.x;
-    sp78.y = this->actor.world.pos.y + this->actor.shape.yOffset;
+    //ipi: Factor in scale here to account for larger sizes
+    sp78.y = this->actor.world.pos.y + (this->actor.shape.yOffset * this->actor.scale.y);
     sp78.z = this->actor.world.pos.z;
     sp6C = sp78;
 
-    sp6C.x += (sp54.x * 24.0f);
-    sp6C.y += (sp54.y * 24.0f);
-    sp6C.z += (sp54.z * 24.0f);
+    //ipi: Factor in scale here to account for larger sizes
+    sp6C.x += (sp54.x * 24.0f * this->actor.scale.x);
+    sp6C.y += (sp54.y * 24.0f * this->actor.scale.y);
+    sp6C.z += (sp54.z * 24.0f * this->actor.scale.z);
     if (BgCheck_EntityLineTest1(&play->colCtx, &sp78, &sp6C, &sp84, &sp94, true, true, true, false, &bgId)) {
         sp60.x = COLPOLY_GET_NORMAL(sp94->normal.x);
         sp60.y = COLPOLY_GET_NORMAL(sp94->normal.y);
@@ -265,7 +360,13 @@ void EnBubble_Fly(EnBubble* this, PlayState* play) {
         if (bounceCount > (s16)(Rand_ZeroOne() * 10.0f)) {
             this->bounceCount = 0;
         }
-        bounceSpeed = (this->bounceCount == 0) ? 3.6000001f : 3.0f;
+        //ipi: Bounce speed depends on size
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            s16 i = CLAMP_MIN(this->actor.params, 2);
+            bounceSpeed = (this->bounceCount == 0) ? sCrazyModeBubbleSpeedHigh[i] : sCrazyModeBubbleSpeedLow[i];
+        } else {
+            bounceSpeed = (this->bounceCount == 0) ? 3.6000001f : 3.0f;
+        }
         this->velocityFromBump.x = this->velocityFromBump.y = this->velocityFromBump.z = 0.0f;
         this->velocityFromBounce.x = (this->bounceDirection.x * bounceSpeed);
         this->velocityFromBounce.y = (this->bounceDirection.y * bounceSpeed);
@@ -337,18 +438,43 @@ void EnBubble_Init(Actor* thisx, PlayState* play) {
 
     ActorShape_Init(&this->actor.shape, 16.0f, ActorShadow_DrawCircle, 0.2f);
     Collider_InitJntSph(play, &this->colliderSphere);
-    Collider_SetJntSph(play, &this->colliderSphere, &this->actor, &sJntSphInit, this->colliderSphereItems);
-    CollisionCheck_SetInfo2(&this->actor.colChkInfo, DamageTable_Get(9), &sColChkInfoInit2);
+    //ipi: Oops, the Shaboms in Jabu-Jabu all get initialized with params of -1, not 0, but I just finished coding these... hotfix!
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params == -1) {
+        this->actor.params = 0;
+    }
+    //ipi: Bubbles are larger depending on params
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params < 2) {
+        ColliderJntSphInit* jntSphInit = this->actor.params == 0 ? &sCrazyModeBigJntSphInit : &sCrazyModeMidJntSphInit;
+        Collider_SetJntSph(play, &this->colliderSphere, &this->actor, jntSphInit, this->colliderSphereItems);
+        CollisionCheckInfoInit2* colChkInfoInit2 = this->actor.params == 0 ? &sCrazyModeBigColChkInfoInit2 : &sCrazyModeMidColChkInfoInit2;
+        CollisionCheck_SetInfo2(&this->actor.colChkInfo, DamageTable_Get(9), colChkInfoInit2);
+    } else {
+        Collider_SetJntSph(play, &this->colliderSphere, &this->actor, &sJntSphInit, this->colliderSphereItems);
+        CollisionCheck_SetInfo2(&this->actor.colChkInfo, DamageTable_Get(9), &sColChkInfoInit2);
+    }
     this->actor.naviEnemyId = 0x16;
     this->bounceDirection.x = Rand_ZeroOne();
     this->bounceDirection.y = Rand_ZeroOne();
     this->bounceDirection.z = Rand_ZeroOne();
     EnBubble_Vec3fNormalize(&this->bounceDirection);
-    this->velocityFromBounce.x = this->bounceDirection.x * 3.0f;
-    this->velocityFromBounce.y = this->bounceDirection.y * 3.0f;
-    this->velocityFromBounce.z = this->bounceDirection.z * 3.0f;
+    this->velocityFromBounce.x = this->bounceDirection.x;
+    this->velocityFromBounce.y = this->bounceDirection.y;
+    this->velocityFromBounce.z = this->bounceDirection.z;
     EnBubble_SetDimensions(this, 0.0f);
     this->actionFunc = EnBubble_Wait;
+    //ipi: Bubbles start moving faster
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (this->actor.params == 0) {
+            Actor_SetScale(&this->actor, 3.0f);
+            Math_Vec3f_Scale(&this->velocityFromBounce, sCrazyModeBubbleSpeedHigh[0]);
+            //this->actor.world.pos.y += 20.0f;   //These are placed directly in world, make sure first bounce is bigger
+        } else if (this->actor.params == 1) {
+            Actor_SetScale(&this->actor, 2.0f);
+            Math_Vec3f_Scale(&this->velocityFromBounce, sCrazyModeBubbleSpeedHigh[1]);
+        } else {
+            Math_Vec3f_Scale(&this->velocityFromBounce, sCrazyModeBubbleSpeedHigh[2]);
+        }
+    }
 }
 
 void EnBubble_Destroy(Actor* thisx, PlayState* play) {
@@ -372,6 +498,17 @@ void EnBubble_Wait(EnBubble* this, PlayState* play) {
 void EnBubble_Pop(EnBubble* this, PlayState* play) {
     if (EnBubble_Explosion(this, play) >= 0) {
         SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 60, NA_SE_EN_AWA_BREAK);
+        //ipi: Split into children
+        if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params < 2) {
+            for (s16 i = 0; i < 2; i++) {
+                Vec3f spawnPos;
+                spawnPos.x = this->actor.world.pos.x + (i-1 * 10.0f);
+                spawnPos.y = this->actor.world.pos.y + (this->actor.scale.y * 12.5f);
+                spawnPos.z = this->actor.world.pos.z + (i-1 * 10.0f);
+                Actor_Spawn(&play->actorCtx, play, ACTOR_EN_BUBBLE, spawnPos.x, spawnPos.y, spawnPos.z,
+                    0, 0, 0, this->actor.params + 1, false);
+            }
+        }
         Actor_Kill(&this->actor);
         GameInteractor_ExecuteOnEnemyDefeat(&this->actor);
     }
@@ -404,7 +541,8 @@ void EnBubble_Update(Actor* thisx, PlayState* play) {
     func_8002D7EC(&this->actor);
     Actor_UpdateBgCheckInfo(play, &this->actor, 16.0f, 16.0f, 0.0f, 7);
     this->actionFunc(this, play);
-    Actor_SetFocus(&this->actor, this->actor.shape.yOffset);
+    //ipi: Factor in scale here to account for larger sizes
+    Actor_SetFocus(&this->actor, this->actor.shape.yOffset * this->actor.scale.y);
 }
 
 void EnBubble_Draw(Actor* thisx, PlayState* play) {
