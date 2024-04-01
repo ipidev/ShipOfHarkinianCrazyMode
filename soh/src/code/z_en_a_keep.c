@@ -183,6 +183,11 @@ void EnAObj_Init(Actor* thisx, PlayState* play) {
         CollisionHeader_GetVirtual(sColHeaders[this->dyna.bgId], &colHeader);
         this->dyna.bgId = DynaPoly_SetBgActor(play, &play->colCtx.dyna, thisx, colHeader);
     }
+
+    //ipi: Flip all the arrow signs around!
+    if (CVarGetInteger("gIpiCrazyMode", 0) && thisx->params == A_OBJ_SIGNPOST_ARROW) {
+        thisx->shape.rot.y += 0x8000;
+    }
 }
 
 void EnAObj_Destroy(Actor* thisx, PlayState* play) {
