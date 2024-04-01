@@ -6340,3 +6340,61 @@ s16 GetChestGameRandoGiDrawId(s8 room, s16 ogDrawId, PlayState* play) {
 
     return ogDrawId;
 }
+
+//ipi: Functions that allow civilians to be killable in crazy mode
+s16 Actor_CrazyModeInitCivilianDamageInternal(Collider* collider, ColliderInfo* colliderInfo) {
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        collider->colType = COLTYPE_HIT5;
+        collider->acFlags = AC_ON | AC_TYPE_PLAYER;
+        colliderInfo->bumper.dmgFlags = 0xFFCFFFFF;
+        colliderInfo->bumperFlags = BUMP_ON;
+        return true;
+    }
+    return false;
+}
+
+s16 Actor_CrazyModeInitCivilianDamage(ColliderCylinder* cylinderCollider) {
+    return Actor_CrazyModeInitCivilianDamageInternal(&cylinderCollider->base, &cylinderCollider->info);
+}
+
+s16 Actor_CrazyModeCheckCivilianDamageInternal(PlayState* play, Actor* actor, Collider* collider, f32 height) {
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (collider->acFlags & AC_HIT) {
+            collider->acFlags &= ~AC_HIT;
+            //Used for particle effects
+            static Vec3f sZero = { 0.0f, 0.0f, 0.0f };
+            static Vec3f sGravity = { 0.0f, -0.75f, 0.0f };
+            static Color_RGBA8 sLightPrimColor = { 255, 0, 0, 255 };
+            static Color_RGBA8 sDarkPrimColor = { 200, 0, 0, 255 };
+            static Color_RGBA8 sEnvColor = { 128, 0, 0, 255 };
+            //Spawn large blood splat
+            Vec3f spawnPos;
+            spawnPos.x = actor->world.pos.x;
+            spawnPos.y = actor->world.pos.y + (height * 0.5f);
+            spawnPos.z = actor->world.pos.z;
+            func_8002836C(play, &spawnPos, &sZero, &sZero, &sDarkPrimColor, &sEnvColor, height * 8, 75, 10);
+            //Spawn small blood drops
+            for (u8 i = 0; i < 12; i++) {
+                f32 speed = Rand_CenteredFloat(4.0f) + 6.0f;
+                s16 horizAngle = (s16)Rand_Next();
+                s16 vertAngle = (s16)Rand_Next();
+                Vec3f velocity;
+                velocity.x = speed * Math_SinS(horizAngle);
+                velocity.y = speed * Math_SinS(vertAngle);
+                velocity.z = speed * Math_CosS(horizAngle);
+                EffectSsDtBubble_SpawnCustomColor(play, &spawnPos, &velocity, &sGravity, &sLightPrimColor, &sEnvColor, 75, 20, 0);
+            }
+            //Play sound and kill actor
+            SoundSource_PlaySfxAtFixedWorldPos(play, &spawnPos, 20, NA_SE_EN_AMOS_DAMAGE);
+            Actor_Kill(actor);
+            return true;
+        } else {
+            CollisionCheck_SetAC(play, &play->colChkCtx, collider);
+        }
+    }
+    return false;
+}
+
+s16 Actor_CrazyModeCheckCivilianDamage(PlayState* play, Actor* actor, ColliderCylinder* cylinderCollider) {
+    return Actor_CrazyModeCheckCivilianDamageInternal(play, actor, &cylinderCollider->base, cylinderCollider->dim.height);
+}

@@ -139,6 +139,7 @@ void EnCs_Init(Actor* thisx, PlayState* play) {
 
     CollisionCheck_SetInfo2(&this->actor.colChkInfo, sDamageTable, &sColChkInfoInit2);
     Actor_UpdateBgCheckInfo(play, &this->actor, 0.0f, 0.0f, 0.0f, 4);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 
     Animation_Change(&this->skelAnime, sAnimationInfo[ENCS_ANIM_0].animation, 1.0f, 0.0f,
                      Animation_GetLastFrame(sAnimationInfo[ENCS_ANIM_0].animation), sAnimationInfo[ENCS_ANIM_0].mode,
@@ -332,6 +333,8 @@ void EnCs_Walk(EnCs* this, PlayState* play) {
         return;
     }
 
+    if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) return;
+
     if (SkelAnime_Update(&this->skelAnime)) {
         animIndex = this->currentAnimIndex;
 
@@ -380,6 +383,8 @@ void EnCs_Wait(EnCs* this, PlayState* play) {
         this->actionFunc = EnCs_Talk;
         return;
     }
+
+    if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) return;
 
     if (SkelAnime_Update(&this->skelAnime)) {
         animIndex = this->currentAnimIndex;

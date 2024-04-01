@@ -70,6 +70,7 @@ void EnJs_Init(Actor* thisx, PlayState* play) {
     this->actor.gravity = -1.0f;
     Actor_SpawnAsChild(&play->actorCtx, &this->actor, play, ACTOR_EN_JSJUTAN, this->actor.world.pos.x,
                        this->actor.world.pos.y, this->actor.world.pos.z, 0, 0, 0, 0);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 }
 
 void EnJs_Destroy(Actor* thisx, PlayState* play) {
@@ -175,6 +176,15 @@ void func_80A89294(EnJs* this) {
 void func_80A89304(EnJs* this, PlayState* play) {
     if (func_80A88F64(this, play, 0x6077)) {
         func_80A89294(this);
+    } else {
+        //ipi: If not in conversation, drop bombchus upon kill
+        if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) {
+            Vec3f spawnPos;
+            spawnPos.x = this->actor.world.pos.x;
+            spawnPos.y = this->actor.world.pos.y + (this->collider.dim.height * 0.5f);
+            spawnPos.z = this->actor.world.pos.z;
+            Item_DropCollectible(play, &spawnPos, ITEM00_BOMBCHU);
+        }
     }
 }
 

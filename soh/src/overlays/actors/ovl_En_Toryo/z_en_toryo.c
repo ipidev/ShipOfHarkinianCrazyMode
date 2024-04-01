@@ -129,6 +129,7 @@ void EnToryo_Init(Actor* thisx, PlayState* play) {
     Animation_Change(&this->skelAnime, sEnToryoAnimation.animation, 1.0f, 0.0f,
                      Animation_GetLastFrame(sEnToryoAnimation.animation), sEnToryoAnimation.mode,
                      sEnToryoAnimation.morphFrames);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
     this->stateFlags |= 8;
     this->actor.targetMode = 6;
     this->actionFunc = func_80B20914;
@@ -387,6 +388,11 @@ void EnToryo_Update(Actor* thisx, PlayState* play) {
             Npc_TrackPoint(thisx, &this->interactInfo, 0, NPC_TRACKING_HEAD_AND_TORSO);
         } else {
             Npc_TrackPoint(thisx, &this->interactInfo, 0, NPC_TRACKING_NONE);
+        }
+
+        //ipi: Don't check for damage while in a conversation
+        if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
+            Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider);
         }
     }
 }

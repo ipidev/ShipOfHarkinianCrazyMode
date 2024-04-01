@@ -980,6 +980,8 @@ void EnHy_InitImpl(EnHy* this, PlayState* play) {
                 Actor_Kill(&this->actor);
                 break;
         }
+
+        Actor_CrazyModeInitCivilianDamage(&this->collider);
     }
 }
 
@@ -1112,6 +1114,37 @@ void EnHy_Update(Actor* thisx, PlayState* play) {
 
         if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
             Actor_MoveForward(&this->actor);
+            //ipi: Spawn an item when killing certain civilians
+            if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) {
+                Vec3f spawnPos;
+                spawnPos.x = this->actor.world.pos.x;
+                spawnPos.y = this->actor.world.pos.y + (this->collider.dim.height * 0.5f);
+                spawnPos.z = this->actor.world.pos.z;
+                switch (this->actor.params & 0x7F) {
+                    case ENHY_TYPE_AOB:     //Dog lady
+                        Item_DropCollectible(play, &spawnPos, ITEM00_STICK);
+                        break;
+                    case ENHY_TYPE_BOJ_3:   //Sakon
+                        Item_DropCollectible(play, &spawnPos, ITEM00_BOMBS_A);
+                        break;
+                    case ENHY_TYPE_BOJ_5:   //Beggar
+                        spawnPos.y -= 20.0f;
+                        Actor* drop = Item_DropCollectible(play, &spawnPos, ITEM00_RUPEE_RED);
+                        if (drop != NULL && play->sceneNum == SCENE_MARKET_DAY) {
+                            drop->world.rot.y = (Rand_ZeroOne() * 0x4000) + 0x4000; //Stop it going through the stairs
+                        }
+                        break;
+                    case ENHY_TYPE_BBA:     //Old woman
+                        Item_DropCollectible(play, &spawnPos, ITEM00_RUPEE_BLUE);
+                        break;
+                    case ENHY_TYPE_BJI_7:   //Wizard
+                        Item_DropCollectible(play, &spawnPos, ITEM00_MAGIC_SMALL);
+                        break;
+                    case ENHY_TYPE_CNE_11:  //Itchy lady
+                        Item_DropCollectible(play, &spawnPos, ITEM00_SEEDS);
+                        break;
+                }
+            }
         }
 
         Actor_UpdateBgCheckInfo(play, &this->actor, 0.0f, 0.0f, 0.0f, 4);

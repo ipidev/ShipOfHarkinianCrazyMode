@@ -219,6 +219,7 @@ void EnMa2_Init(Actor* thisx, PlayState* play) {
     Collider_InitCylinder(play, &this->collider);
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
     CollisionCheck_SetInfo2(&this->actor.colChkInfo, DamageTable_Get(22), &sColChkInfoInit);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 
     switch (func_80AA1B58(this, play)) {
         case 1:
@@ -320,8 +321,17 @@ void EnMa2_Update(Actor* thisx, PlayState* play) {
     func_80AA1DB4(this, play);
     func_80AA1AE4(this, play);
     if (this->actionFunc != func_80AA20E4) {
-        Npc_UpdateTalking(play, &this->actor, &this->interactInfo.talkState, (f32)this->collider.dim.radius + 30.0f,
-                          func_80AA19A0, func_80AA1A38);
+        //ipi: Don't check for damage while in a conversation
+        if (!Npc_UpdateTalking(play, &this->actor, &this->interactInfo.talkState, (f32)this->collider.dim.radius + 30.0f,
+                          func_80AA19A0, func_80AA1A38)) {
+            if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
+                //ipi: Also stop the singing track if you kill her
+                if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) {
+                    func_800F6584(1);
+                    return;
+                }
+            }
+        }
     }
 }
 

@@ -587,6 +587,7 @@ void EnZo_Init(Actor* thisx, PlayState* play) {
     Collider_InitCylinder(play, &this->collider);
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
     CollisionCheck_SetInfo2(&this->actor.colChkInfo, NULL, &sColChkInit);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 
     if (LINK_IS_ADULT && ((this->actor.params & 0x3F) == 8)) {
         Actor_Kill(&this->actor);
@@ -642,6 +643,7 @@ void EnZo_Standing(EnZo* this, PlayState* play) {
     } else {
         this->trackingMode = NPC_TRACKING_NONE;
     }
+    Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider);
 }
 
 void EnZo_Submerged(EnZo* this, PlayState* play) {
@@ -699,6 +701,11 @@ void EnZo_TreadWater(EnZo* this, PlayState* play) {
         this->skelAnime.curFrame = this->skelAnime.endFrame;
         this->skelAnime.endFrame = startFrame;
         this->skelAnime.playSpeed = -1.0f;
+    }
+
+    //ipi: Don't check for damage while in a conversation
+    if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
+        Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider);
     }
 }
 

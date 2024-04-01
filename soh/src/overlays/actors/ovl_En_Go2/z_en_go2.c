@@ -1604,6 +1604,12 @@ void EnGo2_Init(Actor* thisx, PlayState* play) {
             this->actor.flags &= ~ACTOR_FLAG_DRAW_WHILE_CULLED;
     }
 
+    //ipi: Only non item-giving Gorons are killable
+    u8 goronType = this->actor.params & 0x1F;
+    if (goronType != GORON_CITY_ROLLING_BIG && goronType != GORON_CITY_LINK) {
+        Actor_CrazyModeInitCivilianDamage(&this->collider);
+    } 
+
     EnGo2_SetColliderDim(this);
     EnGo2_SetShape(this);
     Animation_ChangeByInfo(&this->skelAnime, sAnimationInfo, ENGO2_ANIM_0);
@@ -2086,6 +2092,11 @@ void EnGo2_Update(Actor* thisx, PlayState* play) {
     Actor_UpdateBgCheckInfo(play, &this->actor, (f32)this->collider.dim.height * 0.5f,
                             (f32)this->collider.dim.radius * 0.6f, 0.0f, 5);
     if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
+        //ipi: Gorons must be awake and can't be any of the item-giving ones
+        u8 goronType = this->actor.params & 0x1F;
+        if (this->isAwake && goronType != GORON_CITY_ROLLING_BIG && goronType != GORON_CITY_LINK) {
+            if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) return;
+        } 
         func_80A44AB0(this, play);
     }
     this->actionFunc(this, play);

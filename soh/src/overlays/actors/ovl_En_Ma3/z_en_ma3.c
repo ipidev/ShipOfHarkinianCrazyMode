@@ -248,6 +248,7 @@ void EnMa3_Init(Actor* thisx, PlayState* play) {
     Collider_InitCylinder(play, &this->collider);
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
     CollisionCheck_SetInfo2(&this->actor.colChkInfo, DamageTable_Get(22), &sColChkInfoInit);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 
     switch (func_80AA2EC8(this, play)) {
         case 0:
@@ -298,6 +299,10 @@ void EnMa3_Update(Actor* thisx, PlayState* play) {
         if (this->unk_20A != 0) {
             func_800F6584(0);
             this->unk_20A = 0;
+        }
+        //ipi: Also stop the singing track if you kill her
+        if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) {
+            func_800F6584(1);
         }
     } else if (this->unk_20A == 0) {
         func_800F6584(1);

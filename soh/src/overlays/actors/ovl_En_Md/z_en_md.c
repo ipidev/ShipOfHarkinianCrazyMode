@@ -668,6 +668,7 @@ void EnMd_Init(Actor* thisx, PlayState* play) {
     Collider_InitCylinder(play, &this->collider);
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
     CollisionCheck_SetInfo2(&this->actor.colChkInfo, NULL, &sColChkInfoInit);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
     if (!EnMd_ShouldSpawn(this, play)) {
         Actor_Kill(&this->actor);
         return;
@@ -846,6 +847,10 @@ void EnMd_Update(Actor* thisx, PlayState* play) {
     func_80AAB158(this, play);
     Actor_UpdateBgCheckInfo(play, &this->actor, 0.0f, 0.0f, 0.0f, 4);
     this->actionFunc(this, play);
+    //ipi: Don't check for damage while in a conversation
+    if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
+        Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider);
+    }
 }
 
 s32 EnMd_OverrideLimbDraw(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos, Vec3s* rot, void* thisx,

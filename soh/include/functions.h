@@ -2473,6 +2473,10 @@ void PauseWarp_Execute();
 
 // #endregion
 
+//ipi: Additional general-use functions
+s16 Actor_CrazyModeInitCivilianDamage(ColliderCylinder* cylinderCollider);
+s16 Actor_CrazyModeCheckCivilianDamage(PlayState* play, Actor* actor, ColliderCylinder* cylinderCollider);
+
 #ifdef __cplusplus
 #undef this
 };

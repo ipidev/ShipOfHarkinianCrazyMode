@@ -89,6 +89,7 @@ void EnMs_Init(Actor* thisx, PlayState* play) {
     Collider_SetCylinderType1(play, &this->collider, &this->actor, &sCylinderInit);
     ActorShape_Init(&this->actor.shape, 0.0f, ActorShadow_DrawCircle, 35.0f);
     Actor_SetScale(&this->actor, 0.015f);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 
     this->actor.colChkInfo.mass = MASS_IMMOVABLE;
     this->actor.speedXZ = 0.0f;
@@ -113,7 +114,8 @@ void EnMs_Wait(EnMs* this, PlayState* play) {
 
     yawDiff = this->actor.yawTowardsPlayer - this->actor.shape.rot.y;
     EnMs_SetOfferText(this, play);
-
+    if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) return;
+    
     if (Actor_ProcessTalkRequest(&this->actor, play)) { // if talk is initiated
         this->actionFunc = EnMs_Talk;
     } else if ((this->actor.xzDistToPlayer < 90.0f) && (ABS(yawDiff) < 0x2000)) { // talk range

@@ -63,6 +63,7 @@ void EnNiwGirl_Init(Actor* thisx, PlayState* play) {
                        17);
     Collider_InitCylinder(play, &this->collider);
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
     this->actor.targetMode = 6;
     if (this->actor.params < 0) {
         this->actor.params = 0;
@@ -118,6 +119,12 @@ void func_80AB9210(EnNiwGirl* this, PlayState* play) {
     zDistBetween = this->chasedEnNiw->actor.world.pos.z - this->actor.world.pos.z;
     if (Message_GetState(&play->msgCtx) != TEXT_STATE_NONE) {
         this->chasedEnNiw->path = 0;
+    } else {
+        //ipi: Don't check for damage while in a conversation
+        if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) {
+            this->chasedEnNiw->path = 0;
+            return;
+        }
     }
     if (sqrtf(SQ(xDistBetween) + SQ(zDistBetween)) < 70.0f) {
         this->chasedEnNiw->path = (this->path + 1);
@@ -173,6 +180,12 @@ void func_80AB94D0(EnNiwGirl* this, PlayState* play) {
     SkelAnime_Update(&this->skelAnime);
     if (Message_GetState(&play->msgCtx) != TEXT_STATE_NONE) {
         this->chasedEnNiw->path = 0;
+    } else {
+        //ipi: Don't check for damage while in a conversation
+        if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) {
+            this->chasedEnNiw->path = 0;
+            return;
+        }
     }
     Math_ApproachZeroF(&this->actor.speedXZ, 0.8f, 0.2f);
     if (Actor_ProcessTalkRequest(&this->actor, play)) {

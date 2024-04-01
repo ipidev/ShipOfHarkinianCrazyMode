@@ -291,6 +291,7 @@ void EnMa1_Init(Actor* thisx, PlayState* play) {
     Collider_InitCylinder(play, &this->collider);
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
     CollisionCheck_SetInfo2(&this->actor.colChkInfo, DamageTable_Get(22), &sColChkInfoInit);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 
     if (IS_RANDO) { // Skip Malon's multiple textboxes before getting an item
         Flags_SetInfTable(INFTABLE_ENTERED_HYRULE_CASTLE);
@@ -519,8 +520,17 @@ void EnMa1_Update(Actor* thisx, PlayState* play) {
     EnMa1_UpdateEyes(this);
     this->actionFunc(this, play);
     if (this->actionFunc != EnMa1_DoNothing) {
-        Npc_UpdateTalking(play, &this->actor, &this->interactInfo.talkState, (f32)this->collider.dim.radius + 30.0f,
-                          EnMa1_GetText, func_80AA0778);
+        //ipi: Don't check for damage while in a conversation
+        if (!Npc_UpdateTalking(play, &this->actor, &this->interactInfo.talkState, (f32)this->collider.dim.radius + 30.0f,
+                          EnMa1_GetText, func_80AA0778)) {
+            if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
+                //ipi: Also stop the singing track if you kill her
+                if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) {
+                    func_800F6584(1);
+                    return;
+                }
+            }
+        }
     }
     func_80AA0B74(this);
     func_80AA0AF4(this, play);

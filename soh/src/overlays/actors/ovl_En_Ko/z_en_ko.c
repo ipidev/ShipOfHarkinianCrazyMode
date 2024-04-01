@@ -1185,6 +1185,7 @@ void func_80A99048(EnKo* this, PlayState* play) {
         this->path = Path_GetByIndex(play, ENKO_PATH, 0xFF);
         Actor_SpawnAsChild(&play->actorCtx, &this->actor, play, ACTOR_EN_ELF, this->actor.world.pos.x,
                            this->actor.world.pos.y, this->actor.world.pos.z, 0, 0, 0, 3);
+        Actor_CrazyModeInitCivilianDamage(&this->collider);
         if (ENKO_TYPE == ENKO_TYPE_CHILD_3) {
             if (!IS_RANDO) {
                 if (!CHECK_QUEST_ITEM(QUEST_KOKIRI_EMERALD)) {
@@ -1297,6 +1298,7 @@ void EnKo_Update(Actor* thisx, PlayState* play) {
     }
     if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
         Actor_MoveForward(&this->actor);
+        if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) return;
     }
     if (func_80A97C7C(this)) {
         Actor_UpdateBgCheckInfo(play, &this->actor, 0.0f, 0.0f, 0.0f, 4);

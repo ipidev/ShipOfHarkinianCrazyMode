@@ -170,6 +170,7 @@ void EnDaikuKakariko_Init(Actor* thisx, PlayState* play) {
                      sAnimationInfo[ENDAIKUKAKARIKO_ANIM_0].mode, sAnimationInfo[ENDAIKUKAKARIKO_ANIM_0].morphFrames);
 
     Actor_UpdateBgCheckInfo(play, &this->actor, 0.0f, 0.0f, 0.0f, 4);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 
     this->actor.gravity = 0.0f;
     this->runSpeed = 3.0f;
@@ -327,6 +328,9 @@ void EnDaikuKakariko_Wait(EnDaikuKakariko* this, PlayState* play) {
         }
 
         this->actionFunc = EnDaikuKakariko_Talk;
+    } else {
+        //ipi: Don't check for damage while in a conversation
+        Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider);
     }
 }
 
@@ -451,6 +455,9 @@ void EnDaikuKakariko_Run(EnDaikuKakariko* this, PlayState* play) {
         this->flags |= 0x200;
         EnDaikuKakariko_ChangeAnim(this, ENDAIKUKAKARIKO_ANIM_4, &this->currentAnimIndex);
         this->actionFunc = EnDaikuKakariko_Talk;
+    } else {
+        //ipi: Don't check for damage while in a conversation
+        Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider);
     }
 }
 

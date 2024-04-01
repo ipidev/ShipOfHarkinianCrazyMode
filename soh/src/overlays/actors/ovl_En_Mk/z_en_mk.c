@@ -64,6 +64,7 @@ void EnMk_Init(Actor* thisx, PlayState* play) {
     Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
     this->actor.colChkInfo.mass = 0xFF;
     Actor_SetScale(&this->actor, 0.01f);
+    Actor_CrazyModeInitCivilianDamage(&this->collider);
 
     this->actionFunc = EnMk_Wait;
     this->flags = 0;
@@ -299,6 +300,7 @@ void EnMk_Wait(EnMk* this, PlayState* play) {
             }
         }
     } else {
+        if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) return;
         this->actor.textId = Text_GetFaceReaction(play, 0x1A);
 
         if (this->actor.textId == 0) {

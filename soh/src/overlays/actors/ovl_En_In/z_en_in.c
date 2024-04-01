@@ -517,6 +517,7 @@ void func_80A79FB0(EnIn* this, PlayState* play) {
         Collider_InitCylinder(play, &this->collider);
         Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
         CollisionCheck_SetInfo2(&this->actor.colChkInfo, NULL, &sColChkInfoInit);
+        Actor_CrazyModeInitCivilianDamage(&this->collider);
         if (func_80A7975C(this, play)) {
             gSaveContext.eventInf[0] &= ~0x8000;
             return;
@@ -916,6 +917,10 @@ void EnIn_Update(Actor* thisx, PlayState* play) {
     collider = &this->collider;
     Collider_UpdateCylinder(&this->actor, collider);
     CollisionCheck_SetOC(play, &play->colChkCtx, &collider->base);
+    //ipi: Don't check for death while talking
+    if (this->interactInfo.talkState == NPC_TALK_STATE_IDLE) {
+        if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) return;
+    }
     if (this->actionFunc != func_80A7A304) {
         SkelAnime_Update(&this->skelAnime);
         if (this->skelAnime.animation == &object_in_Anim_001BE0 && ((gSaveContext.eventInf[0] & 0xF) != 6)) {

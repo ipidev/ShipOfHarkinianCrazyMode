@@ -167,6 +167,11 @@ void func_80AB9F24(EnNiwLady* this, PlayState* play) {
         ActorShape_Init(&this->actor.shape, 0.0f, ActorShadow_DrawCircle, 20.0f);
         Collider_InitCylinder(play, &this->collider);
         Collider_SetCylinder(play, &this->collider, &this->actor, &sCylinderInit);
+        Actor_CrazyModeInitCivilianDamage(&this->collider);
+        //ipi: Also fix collision height
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->collider.dim.height = 66.0f;
+        }
         this->unk_272 = 0;
         this->actor.targetMode = 6;
         this->actor.draw = EnNiwLady_Draw;
@@ -527,6 +532,10 @@ void EnNiwLady_Update(Actor* thisx, PlayState* play) {
     EnNiwLady* this = (EnNiwLady*)thisx;
     Player* player = GET_PLAYER(play);
 
+    //ipi: Don't check for damage while in a conversation
+    if (Message_GetState(&play->msgCtx) == TEXT_STATE_NONE) {
+        if (Actor_CrazyModeCheckCivilianDamage(play, &this->actor, &this->collider)) return;
+    }
     Actor_SetFocus(thisx, 60.0f);
     this->interactInfo.trackPos = player->actor.world.pos;
     if (!LINK_IS_ADULT) {
