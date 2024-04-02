@@ -722,8 +722,8 @@ void EnFirefly_Update(Actor* thisx, PlayState* play2) {
         if (Animation_OnFrame(&this->skelAnime, 5.0f)) {
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_FFLY_FLY);
 
-            //ipi: Occasionally rocks onto the player
-            if (CVarGetInteger("gIpiCrazyMode", 0) && 0.25f >= Rand_ZeroOne()) {
+            //ipi: Occasionally rocks onto the player - TODO: make drop rate timer-based instead
+            if (CVarGetInteger("gIpiCrazyMode", 0) && this->onFire && 0.25f >= Rand_ZeroOne()) {
                 //Ensure there's enough space below
                 Vec3f checkPos, resultPos;
                 checkPos.x = this->actor.world.pos.x;

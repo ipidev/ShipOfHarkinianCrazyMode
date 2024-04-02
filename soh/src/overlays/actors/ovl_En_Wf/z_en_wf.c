@@ -27,7 +27,7 @@ void EnWf_SetupSearchForPlayer(EnWf* this);
 void EnWf_SearchForPlayer(EnWf* this, PlayState* play);
 void EnWf_SetupRunAroundPlayer(EnWf* this);
 void EnWf_RunAroundPlayer(EnWf* this, PlayState* play);
-void EnWf_SetupSlash(EnWf* this);
+void EnWf_SetupSlash(EnWf* this, PlayState* play);
 void EnWf_Slash(EnWf* this, PlayState* play);
 void EnWf_RecoilFromBlockedSlash(EnWf* this, PlayState* play);
 void EnWf_SetupBackflipAway(EnWf* this);
@@ -43,6 +43,10 @@ void EnWf_Sidestep(EnWf* this, PlayState* play);
 void EnWf_SetupDie(EnWf* this);
 void EnWf_Die(EnWf* this, PlayState* play);
 s32 EnWf_DodgeRanged(PlayState* play, EnWf* this);
+
+//ipi: Extra functions to summon reinforcements
+void EnWf_CrazyModeSetupSummonReinforcements(EnWf* this);
+void EnWf_CrazyModeSummonReinforcements(EnWf* this, PlayState* play);
 
 static ColliderJntSphElementInit sJntSphItemsInit[4] = {
     {
@@ -246,6 +250,12 @@ void EnWf_Init(Actor* thisx, PlayState* play) {
         this->colliderSpheres.elements[0].info.toucher.damage = this->colliderSpheres.elements[1].info.toucher.damage =
             8;
         thisx->naviEnemyId = 0x57; // White Wolfos
+        //ipi: Make this "miniboss" less pathetic
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->colliderSpheres.elements[0].info.toucher.effect = 2; //Freezing damage
+            this->colliderSpheres.elements[1].info.toucher.effect = 2;
+            this->actor.colChkInfo.health = 16;
+        }
     }
 
     EnWf_SetupWaitToAppear(this);
@@ -253,6 +263,10 @@ void EnWf_Init(Actor* thisx, PlayState* play) {
     if ((this->switchFlag != 0xFF) && Flags_GetSwitch(play, this->switchFlag)) {
         Actor_Kill(thisx);
     }
+
+    //ipi: Use previously unused field to prompt summoning reinforcements
+    this->unk_2D8[0] = 0; //Will summon reinforcements/prevent damage
+    this->unk_2D8[1] = 0; //Prevent attacks
 }
 
 void EnWf_Destroy(Actor* thisx, PlayState* play) {
@@ -296,7 +310,15 @@ s32 EnWf_ChangeAction(PlayState* play, EnWf* this, s16 mustChoose) {
     playerYawDiff = this->actor.yawTowardsPlayer - this->actor.shape.rot.y;
     playerYawDiff = ABS(playerYawDiff);
 
-    if (func_800354B4(play, &this->actor, 100.0f, 0x2710, 0x2EE0, this->actor.shape.rot.y)) {
+    //ipi: Slightly larger angle checks
+    s16 angleBoost = CVarGetInteger("gIpiCrazyMode", 0) ? 0x1000 : 0;
+    if (func_800354B4(play, &this->actor, 100.0f, 0x2710 + angleBoost, 0x2EE0 + angleBoost, this->actor.shape.rot.y)) {
+        //ipi: Always start blocking in crazy mode
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            EnWf_SetupBlocking(this);
+            return true;
+        }
+
         if (player->meleeWeaponAnimation == 0x11) {
             EnWf_SetupBlocking(this);
             return true;
@@ -356,9 +378,10 @@ s32 EnWf_ChangeAction(PlayState* play, EnWf* this, s16 mustChoose) {
 
         playerFacingAngleDiff = player->actor.shape.rot.y - this->actor.shape.rot.y;
 
+        //ipi: Don't choose slash if we're forced to stall
         if ((this->actor.xzDistToPlayer <= 80.0f) && !Actor_OtherIsTargeted(play, &this->actor) &&
-            (((play->gameplayFrames % 8) != 0) || (ABS(playerFacingAngleDiff) < 0x38E0))) {
-            EnWf_SetupSlash(this);
+            (((play->gameplayFrames % 8) != 0) || (ABS(playerFacingAngleDiff) < 0x38E0)) && this->unk_2D8[1] == 0) {
+            EnWf_SetupSlash(this, play);
             return true;
         }
 
@@ -486,6 +509,12 @@ void EnWf_Wait(EnWf* this, PlayState* play) {
 }
 
 void EnWf_SetupRunAtPlayer(EnWf* this, PlayState* play) {
+    //ipi: If we're forced to stall, instead pick a different action
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->unk_2D8[1] > 0) {
+        EnWf_ChangeAction(play, this, true);
+        return;
+    }
+
     f32 lastFrame = Animation_GetLastFrame(&gWolfosRunningAnim);
 
     Animation_Change(&this->skelAnime, &gWolfosRunningAnim, 1.0f, 0.0f, lastFrame, ANIMMODE_LOOP_INTERP, -4.0f);
@@ -510,10 +539,17 @@ void EnWf_RunAtPlayer(EnWf* this, PlayState* play) {
             baseRange = 150.0f;
         }
 
+        //ipi: Faster!
+        f32 targetSpeed = 8.0f;
+        f32 targetSpeedStep = 1.5f;
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            targetSpeed = 10.0f;
+            targetSpeedStep = 2.5f;
+        }
         if (this->actor.xzDistToPlayer <= (50.0f + baseRange)) {
-            Math_SmoothStepToF(&this->actor.speedXZ, -8.0f, 1.0f, 1.5f, 0.0f);
+            Math_SmoothStepToF(&this->actor.speedXZ, -targetSpeed, 1.0f, targetSpeedStep, 0.0f);
         } else if ((65.0f + baseRange) < this->actor.xzDistToPlayer) {
-            Math_SmoothStepToF(&this->actor.speedXZ, 8.0f, 1.0f, 1.5f, 0.0f);
+            Math_SmoothStepToF(&this->actor.speedXZ, targetSpeed, 1.0f, targetSpeedStep, 0.0f);
         } else {
             Math_SmoothStepToF(&this->actor.speedXZ, 0.0f, 1.0f, 6.65f, 0.0f);
         }
@@ -548,7 +584,7 @@ void EnWf_RunAtPlayer(EnWf* this, PlayState* play) {
 
             if (!Actor_OtherIsTargeted(play, &this->actor) &&
                 ((Rand_ZeroOne() > 0.03f) || ((this->actor.xzDistToPlayer <= 80.0f) && (ABS(temp_v1) < 0x38E0)))) {
-                EnWf_SetupSlash(this);
+                EnWf_SetupSlash(this, play);
             } else if (Actor_OtherIsTargeted(play, &this->actor) && (Rand_ZeroOne() > 0.5f)) {
                 EnWf_SetupBackflipAway(this);
             } else {
@@ -665,10 +701,17 @@ void EnWf_RunAroundPlayer(EnWf* this, PlayState* play) {
             baseRange = 150.0f;
         }
 
+        //ipi: Tornado attack!
+        f32 targetSpeed = 4.0f;
+        f32 targetSpeedStep = 1.5f;
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            targetSpeed = 12.0f;
+            targetSpeedStep = (ABS(this->runSpeed) < 8.0f) ? 2.0f : 0.5f;
+        }
         if (this->actor.xzDistToPlayer <= (60.0f + baseRange)) {
-            Math_SmoothStepToF(&this->runSpeed, -4.0f, 1.0f, 1.5f, 0.0f);
+            Math_SmoothStepToF(&this->runSpeed, -targetSpeed, 1.0f, targetSpeedStep, 0.0f);
         } else if ((80.0f + baseRange) < this->actor.xzDistToPlayer) {
-            Math_SmoothStepToF(&this->runSpeed, 4.0f, 1.0f, 1.5f, 0.0f);
+            Math_SmoothStepToF(&this->runSpeed, targetSpeed, 1.0f, targetSpeedStep, 0.0f);
         } else {
             Math_SmoothStepToF(&this->runSpeed, 0.0f, 1.0f, 6.65f, 0.0f);
         }
@@ -702,7 +745,7 @@ void EnWf_RunAroundPlayer(EnWf* this, PlayState* play) {
 
         if ((Math_CosS(angle1 - this->actor.shape.rot.y) < -0.85f) && !Actor_OtherIsTargeted(play, &this->actor) &&
             (this->actor.xzDistToPlayer <= 80.0f)) {
-            EnWf_SetupSlash(this);
+            EnWf_SetupSlash(this, play);
         } else {
             this->actionTimer--;
 
@@ -718,7 +761,13 @@ void EnWf_RunAroundPlayer(EnWf* this, PlayState* play) {
     }
 }
 
-void EnWf_SetupSlash(EnWf* this) {
+void EnWf_SetupSlash(EnWf* this, PlayState* play) {
+    //ipi: If we're forced to stall, instead pick a different action
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->unk_2D8[1] > 0) {
+        EnWf_ChangeAction(play, this, true);
+        return;
+    }
+
     Animation_PlayOnce(&this->skelAnime, &gWolfosSlashingAnim);
     this->colliderSpheres.base.atFlags &= ~AT_BOUNCED;
     this->actor.shape.rot.y = this->actor.yawTowardsPlayer;
@@ -741,6 +790,14 @@ void EnWf_Slash(EnWf* this, PlayState* play) {
     yawAngleDiff = ABS(yawAngleDiff);
     this->actor.speedXZ = 0.0f;
 
+    //ipi: Feint if the player is close and attacking us
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (curFrame <= 4 && func_800354B4(play, &this->actor, 100.0f, 0x2000, 0x2000, this->actor.shape.rot.y)) {
+            EnWf_SetupBackflipAway(this);
+            return;
+        }
+    }
+
     if (((curFrame >= 9) && (curFrame <= 12)) || ((curFrame >= 17) && (curFrame <= 19))) {
         if (this->slashStatus == 0) {
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_WOLFOS_ATTACK);
@@ -754,6 +811,11 @@ void EnWf_Slash(EnWf* this, PlayState* play) {
     if (((curFrame == 15) && !Actor_IsTargeted(play, &this->actor) &&
          (!Actor_IsFacingPlayer(&this->actor, 0x2000) || (this->actor.xzDistToPlayer >= 100.0f))) ||
         SkelAnime_Update(&this->skelAnime)) {
+        //ipi: Don't turn around and expose the weakpoint, duh!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            EnWf_ChangeAction(play, this, true);
+            return;
+        }
         if ((curFrame != 15) && (this->actionTimer != 0)) {
             this->actor.shape.rot.y += (s16)(3276.0f * (1.5f + (this->actionTimer - 4) * 0.4f));
             Actor_SpawnFloorDustRing(play, &this->actor, &this->actor.world.pos, 15.0f, 1, 2.0f, 50, 50, true);
@@ -792,6 +854,11 @@ void EnWf_SetupRecoilFromBlockedSlash(EnWf* this) {
 
     if ((s32)this->skelAnime.curFrame >= 16) {
         endFrame = 15.0f;
+    }
+
+    //ipi: Recoil animation always lasts a consistent duration
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->skelAnime.curFrame > 4) {
+        endFrame = (s32)this->skelAnime.curFrame - 3;
     }
 
     Animation_Change(&this->skelAnime, &gWolfosSlashingAnim, -0.5f, this->skelAnime.curFrame - 1.0f, endFrame,
@@ -916,6 +983,12 @@ void EnWf_SetupDamaged(EnWf* this) {
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_WOLFOS_DAMAGE);
     this->action = WOLFOS_ACTION_DAMAGED;
     EnWf_SetupAction(this, EnWf_Damaged);
+
+    //ipi: When the White Wolfos is on low enough health, summon reinforcements
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params == WOLFOS_WHITE &&
+        this->actor.colChkInfo.health <= 8 && this->unk_2D8[0] == 0) {
+        this->unk_2D8[0] = 1;
+    }
 }
 
 void EnWf_Damaged(EnWf* this, PlayState* play) {
@@ -935,6 +1008,14 @@ void EnWf_Damaged(EnWf* this, PlayState* play) {
 
     Math_SmoothStepToS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 1, 4500, 0);
 
+    //ipi: Always play the full animation when about to summon reinforcements
+    if (this->unk_2D8[0] == 1) {
+        if (SkelAnime_Update(&this->skelAnime)) {
+            EnWf_CrazyModeSetupSummonReinforcements(this);
+        }
+        return;
+    }
+
     if (!EnWf_ChangeAction(play, this, false) && SkelAnime_Update(&this->skelAnime)) {
         if (this->actor.bgCheckFlags & 1) {
             angleToWall = this->actor.wallYaw - this->actor.shape.rot.y;
@@ -945,7 +1026,7 @@ void EnWf_Damaged(EnWf* this, PlayState* play) {
             } else if (!EnWf_DodgeRanged(play, this)) {
                 if ((this->actor.xzDistToPlayer <= 80.0f) && !Actor_OtherIsTargeted(play, &this->actor) &&
                     ((play->gameplayFrames % 8) != 0)) {
-                    EnWf_SetupSlash(this);
+                    EnWf_SetupSlash(this, play);
                 } else if (Rand_ZeroOne() > 0.5f) {
                     EnWf_SetupWait(this);
                     this->actionTimer = (Rand_ZeroOne() * 5.0f) + 5.0f;
@@ -988,7 +1069,7 @@ void EnWf_SomersaultAndAttack(EnWf* this, PlayState* play) {
         this->actor.world.pos.y = this->actor.floorHeight;
 
         if (!Actor_OtherIsTargeted(play, &this->actor)) {
-            EnWf_SetupSlash(this);
+            EnWf_SetupSlash(this, play);
         } else {
             EnWf_SetupWait(this);
         }
@@ -1039,7 +1120,7 @@ void EnWf_Blocking(EnWf* this, PlayState* play) {
 
                 if (!Actor_OtherIsTargeted(play, &this->actor) &&
                     (((play->gameplayFrames % 2) != 0) || (ABS(angleFacingLink) < 0x38E0))) {
-                    EnWf_SetupSlash(this);
+                    EnWf_SetupSlash(this, play);
                 } else {
                     EnWf_SetupRunAroundPlayer(this);
                 }
@@ -1163,7 +1244,7 @@ void EnWf_Sidestep(EnWf* this, PlayState* play) {
 
                 if ((this->actor.xzDistToPlayer <= 80.0f) && !Actor_OtherIsTargeted(play, &this->actor) &&
                     (((play->gameplayFrames % 4) == 0) || (ABS(angleDiff2) < 0x38E0))) {
-                    EnWf_SetupSlash(this);
+                    EnWf_SetupSlash(this, play);
                 } else {
                     EnWf_SetupRunAtPlayer(this, play);
                 }
@@ -1218,6 +1299,17 @@ void EnWf_Die(EnWf* this, PlayState* play) {
             Flags_SetSwitch(play, this->switchFlag);
         }
 
+        //ipi: Kill any remaining Ice Keese if we spawned them
+        if (this->unk_2D8[0] == 2) {
+            Actor* actor = play->actorCtx.actorLists[ACTORCAT_ENEMY].head;
+            while (actor != NULL) {
+                if (actor->id == ACTOR_EN_FIREFLY && actor->parent == &this->actor) {
+                    Actor_Kill(actor);
+                }
+                actor = actor->next;
+            }
+        }
+
         Actor_Kill(&this->actor);
     } else {
         s32 i;
@@ -1236,6 +1328,54 @@ void EnWf_Die(EnWf* this, PlayState* play) {
     }
 }
 
+//ipi: Extra functions to summon reinforcements
+void EnWf_CrazyModeSetupSummonReinforcements(EnWf* this) {
+    Animation_Change(&this->skelAnime, &gWolfosRearingUpFallingOverAnim, 0.2f, 0.0f, 7.0f, ANIMMODE_ONCE_INTERP, -4.0f);
+    this->actor.speedXZ = 0.0f;
+    this->actor.gravity = 0.0f;
+    this->actionTimer = 30;
+    this->action = WOLFOS_ACTION_WAIT_TO_APPEAR; //Should be fine to reuse this
+    EnWf_SetupAction(this, EnWf_CrazyModeSummonReinforcements);
+}
+
+void EnWf_CrazyModeSummonReinforcements(EnWf* this, PlayState* play) {
+    this->actor.speedXZ = 0.0f;
+
+    if (this->actionTimer > 0) {
+        this->actionTimer--;
+        
+        if (this->actionTimer == 28) {
+            Audio_PlayActorSound2(&this->actor, NA_SE_EN_WOLFOS_APPEAR);
+        } else if (this->actionTimer == 0) {
+            //Summon ice keese as reinforcements
+            for (s16 i = 0; i < 3; i++) {
+                s16 angle = i * 0x5555;
+                Vec3f spawnPos;
+                spawnPos.x = this->actor.world.pos.x + (Math_SinS(angle) * 10.0f);
+                spawnPos.y = this->actor.world.pos.y + 100.0f;
+                spawnPos.z = this->actor.world.pos.z + (Math_CosS(angle) * 10.0f);
+                Actor_SpawnAsChild(&play->actorCtx, &this->actor, play, ACTOR_EN_FIREFLY,
+                    spawnPos.x, spawnPos.y, spawnPos.z, 0, angle, 0, 4);
+            }
+        }
+    }
+
+    //Spawn aura effect
+    static Vec3f sVelocity = { 0.0f, 26.0f, 0.0f };
+    static Vec3f sAcceleration = { 0.0f, -1.0f, 0.0f };
+    static Color_RGBA8 sPrimColor = { 0, 255, 255, 255 };
+    static Color_RGBA8 sEnvColor = { 0, 128, 192, 255 };
+    func_8002836C(play, &this->actor.world.pos, &sVelocity, &sAcceleration, &sPrimColor, &sEnvColor, 2000, -100, 10);
+    
+    //Exit once animation completes
+    if (SkelAnime_Update(&this->skelAnime)) {
+        this->actor.gravity = -2.0f;
+        this->unk_2D8[0] = 2;   //Don't summon reinforcements again
+        this->unk_2D8[1] = 127; //Stall while keese attack player
+        EnWf_SetupWait(this);
+    }
+}
+
 void func_80B36F40(EnWf* this, PlayState* play) {
     if ((this->action == WOLFOS_ACTION_WAIT) && (this->unk_2E2 != 0)) {
         this->unk_4D4.y = Math_SinS(this->unk_2E2 * 4200) * 8920.0f;
@@ -1250,6 +1390,8 @@ void func_80B36F40(EnWf* this, PlayState* play) {
 }
 
 void EnWf_UpdateDamage(EnWf* this, PlayState* play) {
+    //ipi: Don't become damaged while about to summon reinforcements
+    if (this->unk_2D8[0] == 1) return;
     if (this->colliderSpheres.base.acFlags & AC_BOUNCED) {
         this->colliderSpheres.base.acFlags &= ~(AC_HIT | AC_BOUNCED);
         this->colliderCylinderBody.base.acFlags &= ~AC_HIT;
@@ -1350,6 +1492,11 @@ void EnWf_Update(Actor* thisx, PlayState* play) {
         }
     } else {
         this->eyeIndex = (this->eyeIndex + 1) & 3;
+    }
+
+    //ipi: Update forced stall timer
+    if (this->unk_2D8[1] > 0) {
+        this->unk_2D8[1]--;
     }
 }
 
