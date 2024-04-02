@@ -51,6 +51,9 @@ const char* pressStartMsg[] = {
     "APPUYEZ SUR START",
 };
 
+//ipi: Funnier messages in crazy 
+const char* crazyModePressStartMsg = "LETS GET SHIT STARTED";
+
 void EnMag_Init(Actor* thisx, PlayState* play) {
     if (ResourceMgr_IsGameMasterQuest()) {
         EnMag_InitMq(thisx, play);
@@ -60,6 +63,26 @@ void EnMag_Init(Actor* thisx, PlayState* play) {
         EnMag_InitVanilla(thisx, play);
         thisx->update = EnMag_UpdateVanilla;
         drawInnerFunc = EnMag_DrawInnerVanilla;
+    }
+}
+
+//ipi: Occasionally spawn stuff to harass the player
+void EnMag_CrazyModeSpawn(EnMag* this, PlayState* play) {
+    static s16 sTimer = 40;
+    static s16 sActorIds[] = { ACTOR_EN_ZF, ACTOR_EN_WF, ACTOR_EN_TEST, ACTOR_EN_SKB, ACTOR_EN_SKB };
+    static s16 sActorParams[] = { -2, 0, 2, 1, 20 };
+    
+    if (sTimer > 0) {
+        sTimer--;
+    } else {
+        //Spawn random enemy at demo Link's position
+        Player* player = GET_PLAYER(play);
+        if (player != NULL) {
+            s16 spawnIndex = (s16)Rand_ZeroFloat(4.99f);
+            Actor_Spawn(&play->actorCtx, play, sActorIds[spawnIndex], player->actor.world.pos.x, player->actor.world.pos.y,
+                player->actor.world.pos.z, 0, player->actor.world.rot.y, 0, sActorParams[spawnIndex], false);
+        }
+        sTimer = (Rand_ZeroOne() * 60.0f) + 60;
     }
 }
 
@@ -365,6 +388,11 @@ void EnMag_UpdateMq(Actor* thisx, PlayState* play) {
             this->globalState = MAG_STATE_FADE_OUT;
         }
     }
+
+    //ipi: Spawn enemies in crazy mode
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->globalState != MAG_STATE_FADE_OUT) {
+        EnMag_CrazyModeSpawn(this, play);
+    }
 }
 
 void EnMag_UpdateVanilla(Actor* thisx, PlayState* play) {
@@ -524,6 +552,11 @@ void EnMag_UpdateVanilla(Actor* thisx, PlayState* play) {
         if (Flags_GetEnv(play, 4)) {
             this->globalState = MAG_STATE_FADE_OUT;
         }
+    }
+
+    //ipi: Spawn enemies in crazy mode
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->globalState != MAG_STATE_FADE_OUT) {
+        EnMag_CrazyModeSpawn(this, play);
     }
 }
 
@@ -796,12 +829,14 @@ void EnMag_DrawInnerMq(Actor* thisx, PlayState* play, Gfx** gfxp) {
                           0);
         gDPSetPrimColor(gfx++, 0, 0, 0, 0, 0, textAlpha);
 
-        length = GetCharArraySize(pressStartMsg[lang]);
+        //ipi: Use a different string in crazy mode
+        const char* stringToUse = CVarGetInteger("gIpiCrazyMode", 0) ? crazyModePressStartMsg : pressStartMsg[lang];
+        length = GetCharArraySize(stringToUse);
         rectLeft = YREG(7) + 1 + ((length - 11) * -3);
         for (i = 0; i < length; i++) {
-            EnMag_DrawCharTexture(&gfx, font->fontBuf + (pressStartMsg[lang][i] - '\x37') * FONT_CHAR_TEX_SIZE,
+            EnMag_DrawCharTexture(&gfx, font->fontBuf + (stringToUse[i] - '\x37') * FONT_CHAR_TEX_SIZE,
                                   rectLeft, YREG(10) + 172);
-            if (pressStartMsg[lang][i] == ' ') {
+            if (stringToUse[i] == ' ') {
                 rectLeft += YREG(9);
             } else {
                 rectLeft += YREG(8);
@@ -814,9 +849,9 @@ void EnMag_DrawInnerMq(Actor* thisx, PlayState* play, Gfx** gfxp) {
 
         rectLeft = YREG(7) + ((length - 11) * -3);
         for (i = 0; i < length; i++) {
-            EnMag_DrawCharTexture(&gfx, font->fontBuf + (pressStartMsg[lang][i] - '\x37') * FONT_CHAR_TEX_SIZE,
+            EnMag_DrawCharTexture(&gfx, font->fontBuf + (stringToUse[i] - '\x37') * FONT_CHAR_TEX_SIZE,
                                   rectLeft, YREG(10) + 171);
-            if (pressStartMsg[lang][i] == ' ') {
+            if (stringToUse[i] == ' ') {
                 rectLeft += YREG(9);
             } else {
                 rectLeft += YREG(8);
@@ -992,12 +1027,14 @@ void EnMag_DrawInnerVanilla(Actor* thisx, PlayState* play, Gfx** gfxp) {
                           0);
         gDPSetPrimColor(gfx++, 0, 0, 0, 0, 0, textAlpha);
 
-        length = GetCharArraySize(pressStartMsg[lang]);
+        //ipi: Use a different string in crazy mode
+        const char* stringToUse = CVarGetInteger("gIpiCrazyMode", 0) ? crazyModePressStartMsg : pressStartMsg[lang];
+        length = GetCharArraySize(stringToUse);
         rectLeft = YREG(7) + 1 + ((length - 11) * -3);
         for (i = 0; i < length; i++) {
-            EnMag_DrawCharTexture(&gfx, font->fontBuf + (pressStartMsg[lang][i] - '\x37') * FONT_CHAR_TEX_SIZE,
+            EnMag_DrawCharTexture(&gfx, font->fontBuf + (stringToUse[i] - '\x37') * FONT_CHAR_TEX_SIZE,
                                   rectLeft, YREG(10) + 172);
-            if (pressStartMsg[lang][i] == ' ') {
+            if (stringToUse[i] == ' ') {
                 rectLeft += YREG(9);
             } else {
                 rectLeft += YREG(8);
@@ -1010,9 +1047,9 @@ void EnMag_DrawInnerVanilla(Actor* thisx, PlayState* play, Gfx** gfxp) {
 
         rectLeft = YREG(7) + ((length - 11) * -3);
         for (i = 0; i < length; i++) {
-            EnMag_DrawCharTexture(&gfx, font->fontBuf + (pressStartMsg[lang][i] - '\x37') * FONT_CHAR_TEX_SIZE,
+            EnMag_DrawCharTexture(&gfx, font->fontBuf + (stringToUse[i] - '\x37') * FONT_CHAR_TEX_SIZE,
                                   rectLeft, YREG(10) + 171);
-            if (pressStartMsg[lang][i] == ' ') {
+            if (stringToUse[i] == ' ') {
                 rectLeft += YREG(9);
             } else {
                 rectLeft += YREG(8);
