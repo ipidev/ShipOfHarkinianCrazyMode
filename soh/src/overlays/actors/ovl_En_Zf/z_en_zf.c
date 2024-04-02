@@ -293,6 +293,11 @@ void EnZf_Init(Actor* thisx, PlayState* play) {
         thisx->params |= 0xFF00;
     }
 
+    //ipi: Turn lone Lizalfos into Dinolfos, cause they're more interesting
+    if (CVarGetInteger("gIpiCrazyMode", 0) && thisx->params == ENZF_TYPE_LIZALFOS_LONE) {
+        thisx->params = ENZF_TYPE_DINOLFOS;
+    }
+
     ActorShape_Init(&thisx->shape, 0.0f, ActorShadow_DrawFeet, 90.0f);
     this->unk_3E0 = 0;
     thisx->colChkInfo.mass = MASS_HEAVY;
@@ -526,6 +531,34 @@ s16 EnZf_FindNextPlatformTowardsPlayer(Vec3f* pos, s16 curPlatform, s16 arg2, Pl
     return nextPlatform;
 }
 
+//ipi: Don't modify DC Lizalfos that use the platforms
+s32 EnZf_IsCrazyMode(EnZf* this) {
+    return CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params < ENZF_TYPE_LIZALFOS_MINIBOSS_A;
+}
+
+//ipi: Additional function to check if player is making melee attack towards us
+s32 EnZf_IsPlayerUsingMeleeAttack(EnZf* this, Player* player) {
+    return player->meleeWeaponState != 0 && (Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x4000) ||
+        player->meleeWeaponAnimation == PLAYER_MWA_SPIN_ATTACK_1H || player->meleeWeaponAnimation == PLAYER_MWA_SPIN_ATTACK_2H);
+}
+
+//ipi: Additional function to check if we should not approach the player
+s32 EnZf_IsPlayerDangerousToApproach(EnZf* this, Player* player) {
+    return (player->stateFlags1 & PLAYER_STATE1_READY_TO_FIRE) || EnZf_IsPlayerUsingMeleeAttack(this, player);
+}
+
+//ipi: Additional function to setup dodging an arrow
+void EnZf_SetupCircleAroundPlayerDodgeArrow(EnZf* this, Player* player) {
+    //Assuming the player has recently shot an arrow in their direction
+    if (this->actor.xzDistToPlayer < 110.0f) {
+        EnZf_SetupJumpUp(this);
+    } else {
+        s16 yawOfPlayer = player->actor.world.rot.y;
+        s16 yawFromPlayer = Actor_WorldYawTowardActor(&player->actor, &this->actor);
+        EnZf_SetupCircleAroundPlayer(this, (yawOfPlayer > yawFromPlayer) ? 8.0f : -8.0f);
+    }
+}
+
 // Player not targeting this or another EnZf?
 s32 EnZf_CanAttack(PlayState* play, EnZf* this) {
     Actor* targetedActor;
@@ -567,9 +600,11 @@ void func_80B44DC4(EnZf* this, PlayState* play) {
         angleDiff = -angleDiff;
     }
 
+    //ipi: Don't wait for the frame counter here, use 0 which will always pass the check
+    u32 usedCounter = EnZf_IsCrazyMode(this) ? 1 : play->gameplayFrames;
     if (angleDiff >= 0x1B58) {
         func_80B483E4(this, play);
-    } else if ((this->actor.xzDistToPlayer <= 100.0f) && ((play->gameplayFrames % 8) != 0) &&
+    } else if ((this->actor.xzDistToPlayer <= 100.0f) && ((usedCounter % 8) != 0) &&
                EnZf_CanAttack(play, this)) {
         EnZf_SetupSlash(this);
     } else {
@@ -691,8 +726,13 @@ void func_80B45384(EnZf* this) {
     Animation_Change(&this->skelAnime, &gZfCryingAnim, 1.0f, 0.0f, Animation_GetLastFrame(&gZfCryingAnim),
                      ANIMMODE_LOOP_INTERP, -4.0f);
     this->action = ENZF_ACTION_3;
-    this->unk_3F0 = Rand_ZeroOne() * 10.0f + 5.0f;
-    this->actor.speedXZ = 0.0f;
+    //ipi: Don't wait around for as long
+    if (EnZf_IsCrazyMode(this)) {
+        this->unk_3F0 = this->actor.params == ENZF_TYPE_DINOLFOS ? 0 : 5;
+    } else {
+        this->unk_3F0 = Rand_ZeroOne() * 10.0f + 5.0f;
+        this->actor.speedXZ = 0.0f;
+    }
     this->actor.world.rot.y = this->actor.shape.rot.y;
     EnZf_SetupAction(this, func_80B4543C);
 }
@@ -709,7 +749,8 @@ void func_80B4543C(EnZf* this, PlayState* play) {
         if (this->actor.params == ENZF_TYPE_DINOLFOS) {
             if (this->unk_3F4 != 0) {
                 this->unk_3F4--;
-                if (angleToPlayer >= 0x1FFE) {
+                //ipi: Remove Dinolfos' blind spot
+                if (angleToPlayer >= 0x1FFE && !EnZf_IsCrazyMode(this)) {
                     return;
                 }
                 this->unk_3F4 = 0;
@@ -731,13 +772,35 @@ void func_80B4543C(EnZf* this, PlayState* play) {
                 if ((this->actor.xzDistToPlayer < 200.0f) && (this->actor.xzDistToPlayer > 100.0f) &&
                     (Rand_ZeroOne() < 0.3f)) {
                     if (this->actor.params == ENZF_TYPE_DINOLFOS) {
-                        this->actor.world.rot.y = this->actor.shape.rot.y = this->actor.yawTowardsPlayer;
-                        EnZf_SetupJumpForward(this);
+                        //ipi: Don't stupidly jump into the player while they're targeting you?
+                        if (EnZf_IsCrazyMode(this)) {
+                            if (EnZf_IsPlayerUsingMeleeAttack(this, player)) {
+                                EnZf_SetupJumpBack(this);
+                            } else if (Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x4000)) {
+                                //Dodge out of the way of recently-shot arrows
+                                if (player->unk_A73 != 0) {
+                                    EnZf_SetupCircleAroundPlayerDodgeArrow(this, player);
+                                } else {
+                                    func_80B483E4(this, play);
+                                }
+                            } else {
+                                this->actor.world.rot.y = this->actor.shape.rot.y = this->actor.yawTowardsPlayer;
+                                EnZf_SetupJumpForward(this);
+                            }
+                        } else {
+                            this->actor.world.rot.y = this->actor.shape.rot.y = this->actor.yawTowardsPlayer;
+                            EnZf_SetupJumpForward(this);
+                        }
                     } else {
                         func_80B483E4(this, play);
                     }
                 } else if (Rand_ZeroOne() > 0.3f) {
-                    EnZf_SetupApproachPlayer(this, play);
+                    //ipi: Don't approach a dangerous player
+                    if (EnZf_IsCrazyMode(this) && EnZf_IsPlayerDangerousToApproach(this, player)) {
+                        func_80B483E4(this, play);
+                    } else {
+                        EnZf_SetupApproachPlayer(this, play);
+                    }
                 } else {
                     func_80B483E4(this, play);
                 }
@@ -749,6 +812,12 @@ void func_80B4543C(EnZf* this, PlayState* play) {
                 Audio_PlayActorSound2(&this->actor, NA_SE_EN_RIZA_CRY);
             }
         }
+    }
+
+    //ipi: We would normally zero the speed in the setup function, but we didn't to avoid stuttering
+    //Reset speed here if they're still stuck in this state
+    if (EnZf_IsCrazyMode(this) && this->actionFunc == func_80B4543C) {
+        this->actor.speedXZ = 0.0f;
     }
 }
 
@@ -827,10 +896,25 @@ void EnZf_ApproachPlayer(EnZf* this, PlayState* play) {
             sp40 = 100.0f;
         }
 
+        //ipi: Modify approach speed and tendency
+        f32 targetSpeed = 8.0f;
+        f32 targetSpeedStep = 0.5f;
+        if (EnZf_IsCrazyMode(this)) {
+            //Don't approach into an attacking player
+            if (EnZf_IsPlayerDangerousToApproach(this, player)) {
+                sp40 = 100.0f;
+            }
+            //Dinolfos are faster
+            if (this->actor.params == ENZF_TYPE_DINOLFOS) {
+                targetSpeed = 10.0f;
+                targetSpeedStep = 1.5f;
+            }
+        }
+
         if (this->actor.xzDistToPlayer <= (70.0f + sp40)) {
-            Math_SmoothStepToF(&this->actor.speedXZ, -8.0f, 1.0f, 0.5f, 0.0f);
+            Math_SmoothStepToF(&this->actor.speedXZ, -targetSpeed, 1.0f, targetSpeedStep, 0.0f);
         } else {
-            Math_SmoothStepToF(&this->actor.speedXZ, 8.0f, 1.0f, 0.5f, 0.0f);
+            Math_SmoothStepToF(&this->actor.speedXZ, targetSpeed, 1.0f, targetSpeedStep, 0.0f);
         }
 
         this->skelAnime.playSpeed = this->actor.speedXZ * 1.2f;
@@ -884,7 +968,27 @@ void EnZf_ApproachPlayer(EnZf* this, PlayState* play) {
 
             if ((this->actor.xzDistToPlayer < 180.0f) && (this->actor.xzDistToPlayer > 160.0f) &&
                 Actor_IsFacingPlayer(&this->actor, 0x71C)) {
-                if (Actor_IsTargeted(play, &this->actor)) {
+                //ipi: Don't stupidly jump into the player while they're targeting you?
+                if (EnZf_IsCrazyMode(this)) {
+                    if (EnZf_IsPlayerUsingMeleeAttack(this, player)) {
+                        EnZf_SetupJumpBack(this);
+                    } else /*if (Actor_IsTargeted(play, &this->actor)) {
+                        //ipi: TODO something
+                        SoundSource_PlaySfxAtFixedWorldPos(play, &this->actor.world.pos, 20, NA_SE_EN_DEKU_DAMAGE);
+                    } else*/ if (Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x4000)) {
+                        if (player->unk_A73 != 0) {
+                            EnZf_SetupCircleAroundPlayerDodgeArrow(this, player);
+                        } else {
+                            func_80B483E4(this, play);
+                        }
+                    } else if (!EnZf_IsPlayerDangerousToApproach(this, player)) {
+                        this->actor.world.rot.y = this->actor.shape.rot.y = this->actor.yawTowardsPlayer;
+                        EnZf_SetupJumpForward(this);
+                    } else {
+                        func_80B483E4(this, play);
+                    }
+                    return;
+                } else if (Actor_IsTargeted(play, &this->actor)) {
                     if (Rand_ZeroOne() < 0.1f) {
                         this->actor.world.rot.y = this->actor.shape.rot.y = this->actor.yawTowardsPlayer;
                         EnZf_SetupJumpForward(this);
@@ -952,7 +1056,8 @@ void EnZf_JumpForward(EnZf* this, PlayState* play) {
     }
 
     if ((this->actor.params == ENZF_TYPE_DINOLFOS) && (this->actor.bgCheckFlags & 3)) {
-        if (EnZf_CanAttack(play, this)) {
+        //ipi: Always attack after a lunge
+        if (EnZf_CanAttack(play, this) || EnZf_IsCrazyMode(this)) {
             EnZf_SetupSlash(this);
         } else {
             func_80B483E4(this, play);
@@ -1103,10 +1208,25 @@ void func_80B463E4(EnZf* this, PlayState* play) {
             baseRange = 100.0f;
         }
 
+        //ipi: Modify approach speed and tendency
+        f32 targetSpeed = 4.0f;
+        f32 targetSpeedStep = 1.5f;
+        if (EnZf_IsCrazyMode(this)) {
+            //Don't approach into an attacking player
+            if (EnZf_IsPlayerDangerousToApproach(this, player)) {
+                baseRange = 100.0f;
+            }
+            //Dinolfos are faster
+            if (this->actor.params == ENZF_TYPE_DINOLFOS) {
+                targetSpeed = 8.0f;
+                targetSpeedStep = 2.0f;
+            }
+        }
+
         if (this->actor.xzDistToPlayer <= (70.0f + baseRange)) {
-            Math_SmoothStepToF(&this->unk_408, -4.0f, 1.0f, 1.5f, 0.0f);
+            Math_SmoothStepToF(&this->unk_408, -targetSpeed, 1.0f, targetSpeedStep, 0.0f);
         } else if ((90.0f + baseRange) < this->actor.xzDistToPlayer) {
-            Math_SmoothStepToF(&this->unk_408, 4.0f, 1.0f, 1.5f, 0.0f);
+            Math_SmoothStepToF(&this->unk_408, targetSpeed, 1.0f, targetSpeedStep, 0.0f);
         } else {
             Math_SmoothStepToF(&this->unk_408, 0.0f, 1.0f, 5.65f, 0.0f);
         }
@@ -1144,7 +1264,9 @@ void func_80B463E4(EnZf* this, PlayState* play) {
         if ((Math_CosS(angleBehindPlayer - this->actor.shape.rot.y) < -0.85f) || (this->unk_3F0 == 0)) {
             this->actor.world.rot.y = this->actor.shape.rot.y;
 
-            if ((this->actor.xzDistToPlayer <= 100.0f) && ((play->gameplayFrames % 4) == 0) &&
+            //ipi: Don't wait for the frame counter here, use 0 which will always pass the check
+            u32 usedCounter = EnZf_IsCrazyMode(this) ? 1 : play->gameplayFrames;
+            if ((this->actor.xzDistToPlayer <= 100.0f) && ((usedCounter % 4) == 0) &&
                 EnZf_CanAttack(play, this)) {
                 EnZf_SetupSlash(this);
             } else {
@@ -1160,7 +1282,8 @@ void EnZf_SetupSlash(EnZf* this) {
     Animation_Change(&this->skelAnime, &gZfSlashAnim, 1.25f, 0.0f, Animation_GetLastFrame(&gZfSlashAnim), ANIMMODE_ONCE,
                      -4.0f);
 
-    if (this->actor.params == ENZF_TYPE_DINOLFOS) {
+    //ipi: Lizalfos also attack faster in crazy mode (but can't cancel it)
+    if (this->actor.params == ENZF_TYPE_DINOLFOS || EnZf_IsCrazyMode(this)) {
         this->skelAnime.playSpeed = 1.75f;
     }
 
@@ -1178,6 +1301,19 @@ void EnZf_Slash(EnZf* this, PlayState* play) {
 
     this->actor.speedXZ = 0.0f;
 
+    //ipi: Dinolfos can cancel an attack early if they find something to dodge
+    if (EnZf_IsCrazyMode(this) && this->actor.params == ENZF_TYPE_DINOLFOS && this->skelAnime.curFrame < 10.0f) {
+        //Check for normal dodgeable attacks
+        if (EnZf_DodgeRangedEngaging(play, this)) {
+            return;
+        }
+        //Check for a melee attack that might hit us
+        if (player->meleeWeaponState != 0 && Actor_ActorAIsFacingAndNearActorB(&player->actor, &this->actor, 90.0f, 0x6000)) {
+            EnZf_SetupJumpBack(this);
+            return;
+        }
+    }
+
     if ((s32)this->skelAnime.curFrame == 10) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_RIZA_ATTACK);
     }
@@ -1185,7 +1321,8 @@ void EnZf_Slash(EnZf* this, PlayState* play) {
     if (SkelAnime_Update(&this->skelAnime)) {
         EffectBlure_AddSpace(Effect_GetByIndex(this->blureIndex));
 
-        if ((this->actor.params == ENZF_TYPE_DINOLFOS) && !Actor_IsFacingPlayer(&this->actor, 5460)) {
+        //ipi: Remove Dinolfos' blind spot
+        if ((this->actor.params == ENZF_TYPE_DINOLFOS) && !Actor_IsFacingPlayer(&this->actor, 5460) && !EnZf_IsCrazyMode(this)) {
             func_80B45384(this);
             this->unk_3F0 = Rand_ZeroOne() * 5.0f + 5.0f;
             this->unk_3F4 = Rand_ZeroOne() * 20.0f + 100.0f;
@@ -1251,7 +1388,8 @@ void EnZf_SetupJumpBack(EnZf* this) {
     this->hopAnimIndex = 1;
     this->action = ENZF_ACTION_JUMP_BACK;
     this->actor.velocity.y = 15.0f;
-    this->actor.speedXZ = -15.0f;
+    //ipi: Slightly faster for lone wolves
+    this->actor.speedXZ = EnZf_IsCrazyMode(this) ? -17.0f : -15.0f;
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_RIZA_JUMP);
     EnZf_SetupAction(this, EnZf_JumpBack);
 }
@@ -1719,9 +1857,23 @@ void EnZf_JumpUp(EnZf* this, PlayState* play) {
             this->actor.world.rot.y = this->actor.shape.rot.y = this->actor.yawTowardsPlayer;
             this->actor.speedXZ = 0.0f;
             this->actor.world.pos.y = this->actor.floorHeight;
-            EnZf_SetupSlash(this);
-            Audio_PlayActorSound2(&this->actor, NA_SE_EN_RIZA_ATTACK);
-            this->skelAnime.curFrame = 13.0f;
+            //ipi: Attack if we landed in range behind the player, otherwise dodge a counterattack
+            if (EnZf_IsCrazyMode(this)) {
+                Player* player = GET_PLAYER(play);
+                if (Actor_IsFacingAndNearPlayer(&this->actor, 100.0f, 0x3000)) {
+                    if (Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x3000)) {
+                        EnZf_SetupSlash(this);
+                    } else {
+                        EnZf_SetupJumpBack(this);
+                    }
+                } else {
+                    func_80B483E4(this, play);
+                }
+            } else {
+                EnZf_SetupSlash(this);
+                Audio_PlayActorSound2(&this->actor, NA_SE_EN_RIZA_ATTACK);
+                this->skelAnime.curFrame = 13.0f;
+            }
         }
     }
 }
@@ -1739,16 +1891,19 @@ void func_80B483E4(EnZf* this, PlayState* play) {
         Math_SmoothStepToS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 1, 4000, 1);
         playerRotY = player->actor.shape.rot.y;
 
+        //ipi: Dinolfos are faster
+        f32 speed = EnZf_IsCrazyMode(this) && this->actor.params == ENZF_TYPE_DINOLFOS ? 10.0f : 6.0f;
         if (Math_SinS(playerRotY - this->actor.shape.rot.y) >= 0.0f) {
-            this->actor.speedXZ = -6.0f;
+            this->actor.speedXZ = -speed;
         } else if (Math_SinS(playerRotY - this->actor.shape.rot.y) < 0.0f) { // Superfluous check
-            this->actor.speedXZ = 6.0f;
+            this->actor.speedXZ = speed;
         }
 
         this->unk_408 = 0.0f;
         this->hopAnimIndex = 0;
         this->actor.world.rot.y = this->actor.shape.rot.y + 0x3FFF;
-        this->unk_3F0 = Rand_ZeroOne() * 10.0f + 5.0f;
+        //ipi: Reduce timer to account for higher speed (no change by default)
+        this->unk_3F0 = (Rand_ZeroOne() * 10.0f + 5.0f) - (speed - 6.0f);
         this->action = ENZF_ACTION_CIRCLE_AROUND_PLAYER;
         EnZf_SetupAction(this, EnZf_CircleAroundPlayer);
     } else {
@@ -1810,10 +1965,31 @@ void EnZf_CircleAroundPlayer(EnZf* this, PlayState* play) {
         baseRange = 100.0f;
     }
 
+    //ipi: Modify approach speed and tendency
+    f32 targetSpeed = 4.0f;
+    f32 targetSpeedStep = 1.5f;
+    if (EnZf_IsCrazyMode(this)) {
+        //Dodge recently-shot arrows (isn't done using usual dodge function)
+        if (Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x4000) && player->unk_A73 != 0) {
+            EnZf_SetupCircleAroundPlayerDodgeArrow(this, player);
+            return;
+        }
+
+        //Don't approach into an attacking player
+        if (EnZf_IsPlayerDangerousToApproach(this, player)) {
+            baseRange = 100.0f;
+        }
+        //Dinolfos are faster
+        if (this->actor.params == ENZF_TYPE_DINOLFOS) {
+            targetSpeed = 6.0f;
+            targetSpeedStep = 2.0f;
+        }
+    }
+
     if (this->actor.xzDistToPlayer <= (70.0f + baseRange)) {
-        Math_SmoothStepToF(&this->unk_408, -4.0f, 1.0f, 1.5f, 0.0f);
+        Math_SmoothStepToF(&this->unk_408, -targetSpeed, 1.0f, targetSpeedStep, 0.0f);
     } else if ((90.0f + baseRange) < this->actor.xzDistToPlayer) {
-        Math_SmoothStepToF(&this->unk_408, 4.0f, 1.0f, 1.5f, 0.0f);
+        Math_SmoothStepToF(&this->unk_408, targetSpeed, 1.0f, targetSpeedStep, 0.0f);
     } else {
         Math_SmoothStepToF(&this->unk_408, 0.0f, 1.0f, 5.65f, 0.0f);
     }
@@ -1865,15 +2041,30 @@ void EnZf_CircleAroundPlayer(EnZf* this, PlayState* play) {
             } else {
                 this->actor.world.rot.y = this->actor.shape.rot.y;
 
-                if ((this->actor.xzDistToPlayer <= 100.0f) && ((play->gameplayFrames % 4) == 0) &&
-                    EnZf_CanAttack(play, this)) {
-                    EnZf_SetupSlash(this);
-                } else if ((this->actor.xzDistToPlayer < 280.0f) && (this->actor.xzDistToPlayer > 240.0f) &&
-                           !EnZf_PrimaryFloorCheck(this, play, 191.9956f) &&
-                           ((play->gameplayFrames % 2) == 0)) {
-                    EnZf_SetupJumpForward(this);
+                //ipi: Some better choices here
+                if (EnZf_IsCrazyMode(this)) {
+                    if ((this->actor.xzDistToPlayer <= 100.0f) && EnZf_CanAttack(play, this)) {
+                        EnZf_SetupSlash(this);
+                    } else if (!EnZf_IsPlayerDangerousToApproach(this, player)) {
+                        //Only approach or jump if the player is not dangerous
+                        if ((this->actor.xzDistToPlayer < 280.0f) && (this->actor.xzDistToPlayer > 240.0f) &&
+                           !EnZf_PrimaryFloorCheck(this, play, 191.9956f)) {
+                            EnZf_SetupJumpForward(this);
+                        } else {
+                            EnZf_SetupApproachPlayer(this, play);
+                        }
+                    }
                 } else {
-                    EnZf_SetupApproachPlayer(this, play);
+                    if ((this->actor.xzDistToPlayer <= 100.0f) && ((play->gameplayFrames % 4) == 0) &&
+                        EnZf_CanAttack(play, this)) {
+                        EnZf_SetupSlash(this);
+                    } else if ((this->actor.xzDistToPlayer < 280.0f) && (this->actor.xzDistToPlayer > 240.0f) &&
+                            !EnZf_PrimaryFloorCheck(this, play, 191.9956f) &&
+                            ((play->gameplayFrames % 2) == 0)) {
+                        EnZf_SetupJumpForward(this);
+                    } else {
+                        EnZf_SetupApproachPlayer(this, play);
+                    }
                 }
             }
         } else {
@@ -1984,6 +2175,10 @@ void EnZf_UpdateDamage(EnZf* this, PlayState* play) {
     s16 dropParams;
 
     if ((this->bodyCollider.base.acFlags & AC_HIT) && (this->action <= ENZF_ACTION_STUNNED)) {
+        //ipi: Also check for jumping back to avoid attacks
+        if (EnZf_IsCrazyMode(this) && this->action == ENZF_ACTION_JUMP_BACK) {
+            return;
+        }
         this->bodyCollider.base.acFlags &= ~AC_HIT;
 
         if (((this->actor.params < ENZF_TYPE_LIZALFOS_MINIBOSS_A) /* not miniboss */ ||
@@ -1995,7 +2190,12 @@ void EnZf_UpdateDamage(EnZf* this, PlayState* play) {
             if ((this->actor.colChkInfo.damageEffect == ENZF_DMGEFF_STUN) ||
                 (this->actor.colChkInfo.damageEffect == ENZF_DMGEFF_ICE)) {
                 if (this->action != ENZF_ACTION_STUNNED) {
-                    Actor_SetColorFilter(&this->actor, 0, 120, 0, 80);
+                    //ipi: Reduce deku nut effectiveness
+                    s16 stunDuration = 80;
+                    if (EnZf_IsCrazyMode(this) && this->actor.colChkInfo.damageEffect == ENZF_DMGEFF_STUN) {
+                        stunDuration = 8;
+                    }
+                    Actor_SetColorFilter(&this->actor, 0, 120, 0, stunDuration);
                     Actor_ApplyDamage(&this->actor);
                     EnZf_SetupStunned(this);
                 }
@@ -2300,7 +2500,7 @@ s32 EnZf_DodgeRangedEngaging(PlayState* play, EnZf* this) {
     s16 phi_t0;
     s16 phi_v1;
 
-    projectileActor = Actor_GetProjectileActor(play, &this->actor, 600.0f);
+    projectileActor = Actor_GetProjectileActor(play, &this->actor, 1000.0f);
 
     if (projectileActor != NULL) {
         yawToProjectile =
@@ -2350,6 +2550,33 @@ s32 EnZf_DodgeRangedEngaging(PlayState* play, EnZf* this) {
             EnZf_SetupCircleAroundPlayer(this, -4.0f);
         }
         return true;
+    } else if (EnZf_IsCrazyMode(this)) {
+        //ipi: More methods of dodging player attacks
+        Player* player = GET_PLAYER(play);
+
+        //Actor_GetProjectileActor sucks at detecting arrows at close range
+        //Attempt to dodge if the player fires an arrow while close
+        if (this->actor.xzDistToPlayer < 210.0f && player->unk_A73 != 0) {
+            EnZf_SetupCircleAroundPlayerDodgeArrow(this, player);
+            return true;
+        }
+
+        //Detect crouch stabs
+        if (this->actor.xzDistToPlayer < 100.0f && !(player->stateFlags1 & PLAYER_STATE1_TARGETING) &&
+            (player->stateFlags1 & PLAYER_STATE1_SHIELDING)) {
+            if (Rand_ZeroOne() < 0.5f) {
+                EnZf_SetupJumpUp(this);
+            } else {
+                EnZf_SetupJumpBack(this);
+            }
+            return true;
+        }
+        
+        //Dodge out of the way if we're too close to the player and they're ready to attack
+        if (this->actor.xzDistToPlayer < 100.0f && EnZf_IsPlayerDangerousToApproach(this, player)) {
+            EnZf_SetupJumpBack(this);
+            return true;
+        }
     }
     return false;
 }
