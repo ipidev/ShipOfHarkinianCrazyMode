@@ -689,9 +689,18 @@ void EnSt_Bob(EnSt* this, PlayState* play) {
     //plays while it's on the ceiling instead. But the effect is so funny I'm happy to keep it
     if (CVarGetInteger("gIpiCrazyMode", 0)) {
         Player* player = GET_PLAYER(play);
-        Math_SmoothStepToF(&this->actor.world.pos.x, player->actor.world.pos.x, 0.1f, 100.0f, 1.0f);
-        Math_SmoothStepToF(&this->actor.world.pos.y, player->actor.world.pos.y, 0.1f, 100.0f, 1.0f);
-        Math_SmoothStepToF(&this->actor.world.pos.z, player->actor.world.pos.z, 0.1f, 100.0f, 1.0f);
+        //Return home if the player is crawling, otherwise they can get softlocked at the entrance to BotW
+        if (player->stateFlags2 & PLAYER_STATE2_CRAWLING) {
+            Math_SmoothStepToF(&this->actor.world.pos.x, this->actor.home.pos.x, 0.1f, 100.0f, 1.0f);
+            Math_SmoothStepToF(&this->actor.world.pos.y, this->actor.home.pos.y, 0.1f, 100.0f, 1.0f);
+            Math_SmoothStepToF(&this->actor.world.pos.z, this->actor.home.pos.z, 0.1f, 100.0f, 1.0f);
+        } else if (this->gaveDamageSpinTimer == 0) {
+            //A slight mercy if the player is already being damaged
+            f32 speed = player->invincibilityTimer == 0 ? 100.0f : 1.0f;
+            Math_SmoothStepToF(&this->actor.world.pos.x, player->actor.world.pos.x, 0.1f, speed, speed * 0.01f);
+            Math_SmoothStepToF(&this->actor.world.pos.y, player->actor.world.pos.y, 0.1f, speed, speed * 0.01f);
+            Math_SmoothStepToF(&this->actor.world.pos.z, player->actor.world.pos.z, 0.1f, speed, speed * 0.01f);
+        }
     }
 }
 
