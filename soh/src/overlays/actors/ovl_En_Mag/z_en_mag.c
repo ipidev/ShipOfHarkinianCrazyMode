@@ -70,7 +70,7 @@ void EnMag_Init(Actor* thisx, PlayState* play) {
 void EnMag_CrazyModeSpawn(EnMag* this, PlayState* play) {
     static s16 sTimer = 40;
     static s16 sActorIds[] = { ACTOR_EN_ZF, ACTOR_EN_WF, ACTOR_EN_TEST, ACTOR_EN_SKB, ACTOR_EN_SKB };
-    static s16 sActorParams[] = { -2, 0, 2, 1, 20 };
+    static s16 sActorParams[] = { -2, 0, 2, -1, -20 };
     
     if (sTimer > 0) {
         sTimer--;
