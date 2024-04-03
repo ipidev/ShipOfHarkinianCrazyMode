@@ -512,6 +512,11 @@ void EnFd_JumpToGround(EnFd* this, PlayState* play) {
         this->actor.world.rot.y = this->actor.shape.rot.y;
         Animation_ChangeByInfo(&this->skelAnime, sAnimationInfo, ENFD_ANIM_2);
         this->actionFunc = EnFd_Land;
+        //ipi: Animate faster and spawn fire now, since we skip the spinning phase
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->skelAnime.playSpeed = 2.0f;
+            EnFd_SpawnChildFire(this, play, 8, Rand_Next() & 1);
+        }
     }
 }
 
@@ -523,9 +528,21 @@ void EnFd_Land(EnFd* this, PlayState* play) {
         this->spinTimer = Rand_S16Offset(60, 90);
         this->runRadius = Math_Vec3f_DistXYZ(&this->actor.world.pos, &this->actor.home.pos);
         EnFd_GetPosAdjAroundCircle(&adjPos, this, this->runRadius, this->runDir);
-        this->actor.world.rot.y = Math_FAtan2F(adjPos.x, adjPos.z) * (0x8000 / M_PI);
-        Animation_ChangeByInfo(&this->skelAnime, sAnimationInfo, ENFD_ANIM_4);
-        this->actionFunc = EnFd_SpinAndSpawnFire;
+        //ipi: Go straight to circling
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            //From EnFd_SpinAndSpawnFire
+            this->actor.shape.rot.y = this->actor.world.rot.y;
+            this->initYawToInitPos = Math_Vec3f_Yaw(&this->actor.home.pos, &this->actor.world.pos);
+            this->curYawToInitPos = this->runDir < 0 ? 0xFFFF : 0;
+            this->circlesToComplete = (play->state.frames & 7) + 2;
+            this->spinTimer = Rand_S16Offset(30, 120);
+            Animation_ChangeByInfo(&this->skelAnime, sAnimationInfo, ENFD_ANIM_3);
+            this->actionFunc = EnFd_Run;
+        } else {
+            this->actor.world.rot.y = Math_FAtan2F(adjPos.x, adjPos.z) * (0x8000 / M_PI);
+            Animation_ChangeByInfo(&this->skelAnime, sAnimationInfo, ENFD_ANIM_4);
+            this->actionFunc = EnFd_SpinAndSpawnFire;
+        }
     }
 }
 
@@ -630,7 +647,9 @@ void EnFd_Run(EnFd* this, PlayState* play) {
     if (this->skelAnime.curFrame == 6.0f || this->skelAnime.curFrame == 13.0f || this->skelAnime.curFrame == 28.0f) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_FLAME_KICK);
     }
-    Math_SmoothStepToF(&this->actor.speedXZ, 8.0f, 0.1f, 1.0f, 0.0f);
+    //ipi: Faster!
+    f32 targetSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 10.0f : 8.0f;
+    Math_SmoothStepToF(&this->actor.speedXZ, targetSpeed, 0.1f, 1.0f, 0.0f);
 }
 
 /**
