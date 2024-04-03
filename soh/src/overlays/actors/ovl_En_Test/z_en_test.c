@@ -27,8 +27,8 @@ void EnTest_SetupSlashDown(EnTest* this);
 void func_80860BDC(EnTest* this);
 void EnTest_SetupIdleFromBlock(EnTest* this);
 void EnTest_SetupRecoil(EnTest* this);
-void func_80862398(EnTest* this);
-void func_80862154(EnTest* this);
+void func_80862398(EnTest* this, PlayState* play);
+void func_80862154(EnTest* this, PlayState* play);
 void EnTest_SetupStopAndBlock(EnTest* this);
 void func_808627C4(EnTest* this, PlayState* play);
 
@@ -277,6 +277,10 @@ void EnTest_Init(Actor* thisx, PlayState* play) {
 
     Collider_InitCylinder(play, &this->shieldCollider);
     Collider_SetCylinder(play, &this->shieldCollider, &this->actor, &sShieldColliderInit);
+    //ipi: Inflate shield hitbox slightly
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->shieldCollider.dim.radius += 10.0f;
+    }
 
     Collider_InitQuad(play, &this->swordCollider);
     Collider_SetQuad(play, &this->swordCollider, &this->actor, &sSwordColliderInit);
@@ -284,14 +288,35 @@ void EnTest_Init(Actor* thisx, PlayState* play) {
     this->actor.colChkInfo.mass = MASS_HEAVY;
     this->actor.colChkInfo.health = 10;
 
-    slashBlure.p1StartColor[0] = slashBlure.p1StartColor[1] = slashBlure.p1StartColor[2] = slashBlure.p1StartColor[3] =
-        slashBlure.p2StartColor[0] = slashBlure.p2StartColor[1] = slashBlure.p2StartColor[2] =
-            slashBlure.p1EndColor[0] = slashBlure.p1EndColor[1] = slashBlure.p1EndColor[2] = slashBlure.p2EndColor[0] =
-                slashBlure.p2EndColor[1] = slashBlure.p2EndColor[2] = 255;
+    //ipi: Sword trail effect is red to reflect fire properties
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->swordCollider.info.toucher.effect = 1;
+        slashBlure.p1StartColor[0] = 255;
+        slashBlure.p1StartColor[1] = 0;
+        slashBlure.p1StartColor[2] = 0;
+        slashBlure.p1StartColor[3] = 64;
+        slashBlure.p2StartColor[0] = 255;
+        slashBlure.p2StartColor[1] = 0;
+        slashBlure.p2StartColor[2] = 0;
+        slashBlure.p2StartColor[3] = 255;
+        slashBlure.p1EndColor[0] = 255;
+        slashBlure.p1EndColor[1] = 255;
+        slashBlure.p1EndColor[2] = 0;
+        slashBlure.p1EndColor[3] = 0;
+        slashBlure.p2EndColor[0] = 255;
+        slashBlure.p2EndColor[1] = 255;
+        slashBlure.p2EndColor[2] = 128;
+        slashBlure.p2EndColor[3] = 0;
+    } else {
+        slashBlure.p1StartColor[0] = slashBlure.p1StartColor[1] = slashBlure.p1StartColor[2] = slashBlure.p1StartColor[3] =
+            slashBlure.p2StartColor[0] = slashBlure.p2StartColor[1] = slashBlure.p2StartColor[2] =
+                slashBlure.p1EndColor[0] = slashBlure.p1EndColor[1] = slashBlure.p1EndColor[2] = slashBlure.p2EndColor[0] =
+                    slashBlure.p2EndColor[1] = slashBlure.p2EndColor[2] = 255;
 
-    slashBlure.p1EndColor[3] = 0;
-    slashBlure.p2EndColor[3] = 0;
-    slashBlure.p2StartColor[3] = 64;
+        slashBlure.p1EndColor[3] = 0;
+        slashBlure.p2EndColor[3] = 0;
+        slashBlure.p2StartColor[3] = 64;
+    }
 
     slashBlure.elemDuration = 4;
     slashBlure.unkFlag = 0;
@@ -426,6 +451,12 @@ void EnTest_ChooseAction(EnTest* this, PlayState* play) {
     }
 }
 
+//ipi: Additional function to detect potential crouch stabs
+s32 EnTest_IsPlayerAboutToCrouchStab(EnTest* this, Player* player) {
+    return this->actor.xzDistToPlayer < 90.0f && Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x3000) &&
+        !(player->stateFlags1 & PLAYER_STATE1_TARGETING) && player->stateFlags1 & PLAYER_STATE1_SHIELDING;
+}
+
 void EnTest_SetupWaitGround(EnTest* this) {
     Animation_PlayLoop(&this->skelAnime, &gStalfosMiddleGuardAnim);
     this->unk_7C8 = 0;
@@ -481,7 +512,12 @@ void EnTest_WaitAbove(EnTest* this, PlayState* play) {
 void EnTest_SetupIdle(EnTest* this) {
     Animation_PlayLoop(&this->skelAnime, &gStalfosMiddleGuardAnim);
     this->unk_7C8 = 0xA;
-    this->timer = (Rand_ZeroOne() * 10.0f) + 5.0f;
+    //ipi: Allow us to exit idle state immediately if we see an opportunity
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.xzDistToPlayer < 300.0f) {
+        this->timer = 0;
+    } else {
+        this->timer = (Rand_ZeroOne() * 10.0f) + 5.0f;
+    }
     this->actor.speedXZ = 0.0f;
     this->actor.world.rot.y = this->actor.shape.rot.y;
     EnTest_SetupAction(this, EnTest_Idle);
@@ -513,7 +549,35 @@ void EnTest_Idle(EnTest* this, PlayState* play) {
             this->timer--;
         } else {
             if (Actor_IsFacingPlayer(&this->actor, 0x1555)) {
-                if ((this->actor.xzDistToPlayer < 220.0f) && (this->actor.xzDistToPlayer > 160.0f) &&
+                //ipi: Different decision making here
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    //We're facing the player and in jumpslash range
+                    if (this->actor.xzDistToPlayer < 220.0f && this->actor.xzDistToPlayer > 160.0f) {
+                        if (Actor_IsTargeted(play, &this->actor) || Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x2000)) {
+                            //We're being targeted or looked at, either strafe or engage
+                            if (Rand_ZeroOne() > 0.5f) {
+                                EnTest_SetupWalkAndBlock(this);
+                            } else {
+                                func_808627C4(this, play);
+                            }
+                        } else {
+                            EnTest_SetupJumpslash(this);
+                        }
+                    } else if (this->actor.xzDistToPlayer < 100.0f) {
+                        //Player is close, attack if they're not shielding
+                        if (!Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x2000) || !(player->stateFlags1 & PLAYER_STATE1_SHIELDING)) {
+                            EnTest_SetupSlashDown(this);
+                        } else {
+                            EnTest_SetupWalkAndBlock(this);
+                        }
+                    } else if (this->actor.xzDistToPlayer >= 220.0f) {
+                        //Player is far away
+                        func_808627C4(this, play);
+                    } else {
+                        //Player is at midrange
+                        EnTest_SetupWalkAndBlock(this);
+                    }
+                } else if ((this->actor.xzDistToPlayer < 220.0f) && (this->actor.xzDistToPlayer > 160.0f) &&
                     (Rand_ZeroOne() < 0.3f)) {
                     if (Actor_IsTargeted(play, &this->actor)) {
                         EnTest_SetupJumpslash(this);
@@ -552,7 +616,10 @@ void EnTest_Fall(EnTest* this, PlayState* play) {
 }
 
 void EnTest_Land(EnTest* this, PlayState* play) {
-    if (SkelAnime_Update(&this->skelAnime)) {
+    //ipi: Start moving immediately upon landing
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.bgCheckFlags & 1) {
+        EnTest_SetupIdle(this);
+    } else if (SkelAnime_Update(&this->skelAnime)) {
         EnTest_SetupIdle(this);
         this->timer = (Rand_ZeroOne() * 10.0f) + 5.0f;
     }
@@ -582,20 +649,34 @@ void EnTest_WalkAndBlock(EnTest* this, PlayState* play) {
     if (!EnTest_ReactToProjectile(play, this)) {
         this->timer++;
 
-        if (Actor_OtherIsTargeted(play, &this->actor)) {
+        //ipi: Don't chicken out if we're not being targeted!
+        if (Actor_OtherIsTargeted(play, &this->actor) && !CVarGetInteger("gIpiCrazyMode", 0)) {
             checkDist = 150.0f;
         }
 
-        if (this->actor.xzDistToPlayer <= (80.0f + checkDist)) {
-            Math_SmoothStepToF(&this->actor.speedXZ, -5.0f, 1.0f, 0.8f, 0.0f);
-        } else if (this->actor.xzDistToPlayer > (110.0f + checkDist)) {
-            Math_SmoothStepToF(&this->actor.speedXZ, 5.0f, 1.0f, 0.8f, 0.0f);
+        //ipi: Don't engage on attacking players
+        if (CVarGetInteger("gIpiCrazyMode", 0))
+        {
+            if (func_800354B4(play, &this->actor, 100.0f, 0x2000, 0x2000, this->actor.shape.rot.y)) {
+                checkDist = 100.0f;
+            } else if (player->meleeWeaponState != 0 && (player->meleeWeaponAnimation == PLAYER_MWA_SPIN_ATTACK_1H || player->meleeWeaponAnimation == PLAYER_MWA_SPIN_ATTACK_2H)) {
+                checkDist = 150.0f;
+            }
         }
 
-        if (this->actor.speedXZ >= 5.0f) {
-            this->actor.speedXZ = 5.0f;
-        } else if (this->actor.speedXZ < -5.0f) {
-            this->actor.speedXZ = -5.0f;
+        //ipi: Faster!
+        f32 targetSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 7.0f : 5.0f;
+        f32 targetSpeedStep = CVarGetInteger("gIpiCrazyMode", 0) ? 2.0f : 0.8f;
+        if (this->actor.xzDistToPlayer <= (80.0f + checkDist)) {
+            Math_SmoothStepToF(&this->actor.speedXZ, -targetSpeed, 1.0f, targetSpeedStep, 0.0f);
+        } else if (this->actor.xzDistToPlayer > (110.0f + checkDist)) {
+            Math_SmoothStepToF(&this->actor.speedXZ, targetSpeed, 1.0f, targetSpeedStep, 0.0f);
+        }
+
+        if (this->actor.speedXZ >= targetSpeed) {
+            this->actor.speedXZ = targetSpeed;
+        } else if (this->actor.speedXZ < -targetSpeed) {
+            this->actor.speedXZ = -targetSpeed;
         }
 
         if ((this->actor.params == STALFOS_TYPE_CEILING) &&
@@ -621,6 +702,11 @@ void EnTest_WalkAndBlock(EnTest* this, PlayState* play) {
             playSpeed = CLAMP_MAX(playSpeed, 2.5f);
             this->skelAnime.playSpeed = playSpeed;
         } else {
+            //ipi: Also activate the shield when backing away
+            if (CVarGetInteger("gIpiCrazyMode", 0) && this->unk_7DE == 0) {
+                this->unk_7DE++;
+            }
+
             playSpeed = CLAMP_MIN(playSpeed, -2.5f);
             this->skelAnime.playSpeed = playSpeed;
         }
@@ -662,7 +748,11 @@ void EnTest_WalkAndBlock(EnTest* this, PlayState* play) {
 
         if ((this->actor.xzDistToPlayer < 220.0f) && (this->actor.xzDistToPlayer > 160.0f) &&
             (Actor_IsFacingPlayer(&this->actor, 0x71C))) {
-            if (Actor_IsTargeted(play, &this->actor)) {
+            //ipi: If the player has just landed from a jumpslash, counterattack
+            if (CVarGetInteger("gIpiCrazyMode", 0) && player->meleeWeaponState != 0 &&
+                player->meleeWeaponAnimation == PLAYER_MWA_JUMPSLASH_FINISH && Rand_ZeroOne() < 0.5f) {
+                EnTest_SetupJumpslash(this);
+            } else if (Actor_IsTargeted(play, &this->actor)) {
                 if (Rand_ZeroOne() < 0.1f) {
                     EnTest_SetupJumpslash(this);
                     return;
@@ -681,7 +771,8 @@ void EnTest_WalkAndBlock(EnTest* this, PlayState* play) {
             }
         }
 
-        if (Rand_ZeroOne() < 0.4f) {
+        //ipi: Always face the player
+        if (Rand_ZeroOne() < 0.4f || CVarGetInteger("gIpiCrazyMode", 0)) {
             this->actor.shape.rot.y = this->actor.world.rot.y = this->actor.yawTowardsPlayer;
         }
 
@@ -907,6 +998,10 @@ void EnTest_SetupSlashDown(EnTest* this) {
     if (this->unk_7DE != 0) {
         this->unk_7DE = 3;
     }
+    //ipi: Faster attacks
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed = 1.5f;
+    }
 }
 
 void EnTest_SlashDown(EnTest* this, PlayState* play) {
@@ -920,14 +1015,36 @@ void EnTest_SlashDown(EnTest* this, PlayState* play) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_STAL_SAKEBI);
     }
 
-    if ((this->skelAnime.curFrame > 7.0f) && (this->skelAnime.curFrame < 11.0f)) {
+    //ipi: Greater attack window, because why not
+    f32 minAttackFrame = CVarGetInteger("gIpiCrazyMode", 0) ? 6.9f : 7.0f;
+    f32 maxAttackFrame = CVarGetInteger("gIpiCrazyMode", 0) ? 12.1f : 11.0f;
+
+    //ipi: Feint if the player starts attacking us
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (this->skelAnime.curFrame <= minAttackFrame && func_800354B4(play, &this->actor, 100.0f, 0x2000, 0x2000, this->actor.shape.rot.y)) {
+            this->meleeWeaponState = 0;
+            EnTest_SetupStopAndBlock(this);
+            return;
+        } else {
+            //Withdraw attack if we're about to hit a shielding player
+            Player* player = GET_PLAYER(play);
+            if (this->skelAnime.curFrame >= 4.0f && this->skelAnime.curFrame <= minAttackFrame && player->stateFlags1 & PLAYER_STATE1_SHIELDING) {
+                this->meleeWeaponState = 0;
+                EnTest_SetupStopAndBlock(this);
+                return;
+            }
+        }
+    }
+
+    if ((this->skelAnime.curFrame > minAttackFrame) && (this->skelAnime.curFrame < maxAttackFrame)) {
         this->meleeWeaponState = 1;
     } else {
         this->meleeWeaponState = 0;
     }
 
     if (SkelAnime_Update(&this->skelAnime)) {
-        if ((play->gameplayFrames % 2) != 0) {
+        //ipi: Never go into the second slash, it exposes us for too long
+        if ((play->gameplayFrames % 2) != 0 || CVarGetInteger("gIpiCrazyMode", 0)) {
             EnTest_SetupSlashDownEnd(this);
         } else {
             EnTest_SetupSlashUp(this);
@@ -940,12 +1057,30 @@ void EnTest_SetupSlashDownEnd(EnTest* this) {
     this->unk_7C8 = 0x12;
     this->actor.speedXZ = 0.0f;
     EnTest_SetupAction(this, EnTest_SlashDownEnd);
+    //ipi: Faster attacks, and make sure we clear the melee state
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed = 1.5f;
+        this->meleeWeaponState = 0;
+    }
 }
 
 void EnTest_SlashDownEnd(EnTest* this, PlayState* play) {
     Player* player = GET_PLAYER(play);
     s16 yawDiff;
 
+    //ipi: Block if the player starts attacking us
+    if (CVarGetInteger("gIpiCrazyMode", 0))
+    {
+        if (func_800354B4(play, &this->actor, 100.0f, 0x2000, 0x2000, this->actor.shape.rot.y) ||
+            EnTest_IsPlayerAboutToCrouchStab(this, player)) {
+            if (this->actor.params != STALFOS_TYPE_CEILING) {
+                this->actor.shape.rot.y = this->actor.world.rot.y = this->actor.yawTowardsPlayer;
+                EnTest_SetupJumpBack(this);
+            } else {
+                EnTest_SetupStopAndBlock(this);
+            }
+        }
+    }
     if (SkelAnime_Update(&this->skelAnime)) {
         if (this->swordCollider.base.atFlags & AT_HIT) {
             this->swordCollider.base.atFlags &= ~AT_HIT;
@@ -955,7 +1090,8 @@ void EnTest_SlashDownEnd(EnTest* this, PlayState* play) {
             }
         }
 
-        if (Rand_ZeroOne() > 0.7f) {
+        //ipi: Don't become idle, select a more sensible option
+        if (Rand_ZeroOne() > 0.7f && !CVarGetInteger("gIpiCrazyMode", 0)) {
             EnTest_SetupIdle(this);
             this->timer = (Rand_ZeroOne() * 5.0f) + 5.0f;
             return;
@@ -978,6 +1114,15 @@ void EnTest_SlashDownEnd(EnTest* this, PlayState* play) {
             if ((ABS(yawDiff) > 0x3E80) && (this->actor.params != STALFOS_TYPE_CEILING)) {
                 this->actor.world.rot.y = this->actor.yawTowardsPlayer;
                 EnTest_SetupJumpBack(this);
+            } else if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                //ipi: Choose a more sensible disengage option
+                if (this->actor.xzDistToPlayer < 120.0f && this->actor.params != STALFOS_TYPE_CEILING) {
+                    EnTest_SetupJumpBack(this);
+                } else if ((play->gameplayFrames % 2) != 0) {
+                    func_808627C4(this, play);
+                } else {
+                    EnTest_SetupSlashDown(this);
+                }
             } else if (player->stateFlags1 & PLAYER_STATE1_ENEMY_TARGET) {
                 if (this->actor.isTargeted) {
                     EnTest_SetupSlashDown(this);
@@ -1053,18 +1198,28 @@ void EnTest_JumpBack(EnTest* this, PlayState* play) {
         this->timer--;
     }
 
-    if (SkelAnime_Update(&this->skelAnime)) {
+    //ipi: Act as soon as we hit the ground
+    if (SkelAnime_Update(&this->skelAnime)/* || (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.bgCheckFlags & 2)*/) {
         if (!EnTest_ReactToProjectile(play, this)) {
             if (this->actor.xzDistToPlayer <= 100.0f) {
                 if (Actor_IsFacingPlayer(&this->actor, 0x1555)) {
                     EnTest_SetupSlashDown(this);
                 } else {
                     EnTest_SetupIdle(this);
-                    this->timer = (Rand_ZeroOne() * 5.0f) + 5.0f;
+                    //ipi: Allow us to exit idle state immediately if we see an opportunity
+                    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 0 : (Rand_ZeroOne() * 5.0f) + 5.0f;
                 }
             } else {
                 if ((this->actor.xzDistToPlayer <= 220.0f) && Actor_IsFacingPlayer(&this->actor, 0xE38)) {
-                    EnTest_SetupJumpslash(this);
+                    //ipi: Don't jumpslash straight into the player
+                    Player* player = GET_PLAYER(play);
+                    if (CVarGetInteger("gIpiCrazyMode", 0) && Actor_ActorAIsFacingActorB(&player->actor, &this->actor, 0x4000)) {
+                        EnTest_SetupIdle(this);
+                        //ipi: Allow us to exit idle state immediately if we see an opportunity
+                        this->timer = 0;
+                    } else {
+                        EnTest_SetupJumpslash(this);
+                    }
                 } else {
                     EnTest_SetupIdle(this);
                     this->timer = (Rand_ZeroOne() * 5.0f) + 5.0f;
@@ -1106,6 +1261,8 @@ void EnTest_Jumpslash(EnTest* this, PlayState* play) {
         } else {
             this->actor.speedXZ = 0.0f;
             EnTest_SetupIdle(this);
+            //ipi: Allow us to exit idle state immediately if we see an opportunity
+            this->timer = 0;
         }
     }
 
@@ -1117,10 +1274,29 @@ void EnTest_Jumpslash(EnTest* this, PlayState* play) {
         if (this->actor.speedXZ != 0.0f) {
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_DODO_M_GND);
         }
+        //ipi: Hasten recovery
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->skelAnime.playSpeed = 2.0f;
+        }
 
         this->actor.world.pos.y = this->actor.floorHeight;
         this->actor.velocity.y = 0.0f;
         this->actor.speedXZ = 0.0f;
+    }
+    
+    //ipi: If we've landed, allow ourselves to disengage
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.bgCheckFlags & 1) {
+        if (!EnTest_ReactToProjectile(play, this)) {
+            Player* player = GET_PLAYER(play);
+            if (this->actor.xzDistToPlayer < 120.0f && player->meleeWeaponState != 0) {
+                this->actor.shape.rot.y = this->actor.world.rot.y = this->actor.yawTowardsPlayer;
+                if (this->actor.params == STALFOS_TYPE_CEILING || player->meleeWeaponAnimation == PLAYER_MWA_JUMPSLASH_START) {
+                    EnTest_StopAndBlock(this, play);
+                } else {
+                    EnTest_SetupJumpBack(this);
+                }
+            }
+        }
     }
 }
 
@@ -1133,6 +1309,11 @@ void EnTest_SetupJumpUp(EnTest* this) {
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_STAL_JUMP);
     this->actor.world.rot.y = this->actor.shape.rot.y;
     EnTest_SetupAction(this, EnTest_JumpUp);
+    //ipi: Jump slightly faster with a lower arc
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->actor.speedXZ = 8.0f;
+        this->actor.velocity.y = 13.0f;
+    }
 }
 
 void EnTest_JumpUp(EnTest* this, PlayState* play) {
@@ -1210,13 +1391,23 @@ void EnTest_IdleFromBlock(EnTest* this, PlayState* play) {
     }
 }
 
-void func_80862154(EnTest* this) {
+void func_80862154(EnTest* this, PlayState* play) {
     Animation_PlayOnce(&this->skelAnime, &gStalfosFlinchFromHitFrontAnim);
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_STAL_DAMAGE);
     this->unk_7C8 = 8;
     this->actor.speedXZ = -2.0f;
     Actor_SetColorFilter(&this->actor, 0x4000, 0xFF, 0, 8);
     EnTest_SetupAction(this, func_808621D4);
+
+    //ipi: Spawn stalchild, because why not
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Vec3f spawnPos;
+        spawnPos.x = this->actor.world.pos.x + Math_SinS(this->actor.world.rot.y);
+        spawnPos.y = this->actor.floorHeight;
+        spawnPos.z = this->actor.world.pos.z + Math_CosS(this->actor.world.rot.y);
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_SKB, spawnPos.x, spawnPos.y, spawnPos.z,
+            0, this->actor.world.rot.y, 0, -2, true);
+    }
 }
 
 void func_808621D4(EnTest* this, PlayState* play) {
@@ -1226,7 +1417,7 @@ void func_808621D4(EnTest* this, PlayState* play) {
 
     if (SkelAnime_Update(&this->skelAnime)) {
         this->actor.speedXZ = 0.0f;
-
+        
         if ((this->actor.bgCheckFlags & 8) && ((ABS((s16)(this->actor.wallYaw - this->actor.shape.rot.y)) < 0x38A4) &&
                                                (this->actor.xzDistToPlayer < 80.0f))) {
             EnTest_SetupJumpUp(this);
@@ -1252,13 +1443,23 @@ void func_808621D4(EnTest* this, PlayState* play) {
     }
 }
 
-void func_80862398(EnTest* this) {
+void func_80862398(EnTest* this, PlayState* play) {
     Animation_PlayOnce(&this->skelAnime, &gStalfosFlinchFromHitBehindAnim);
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_STAL_DAMAGE);
     this->unk_7C8 = 9;
     this->actor.speedXZ = -2.0f;
     Actor_SetColorFilter(&this->actor, 0x4000, 0xFF, 0, 8);
     EnTest_SetupAction(this, func_80862418);
+
+    //ipi: Spawn stalchild, because why not
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Vec3f spawnPos;
+        spawnPos.x = this->actor.world.pos.x + Math_SinS(this->actor.world.rot.y);
+        spawnPos.y = this->actor.floorHeight;
+        spawnPos.z = this->actor.world.pos.z + Math_CosS(this->actor.world.rot.y);
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_SKB, spawnPos.x, spawnPos.y, spawnPos.z,
+            0, this->actor.world.rot.y, 0, -2, true);
+    }
 }
 
 void func_80862418(EnTest* this, PlayState* play) {
@@ -1298,10 +1499,15 @@ void EnTest_SetupStunned(EnTest* this) {
     this->skelAnime.playSpeed = 0.0f;
     this->actor.speedXZ = -4.0f;
 
+    //ipi: Nerf stunning effects
+    s16 stunDuration = 0x50;
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->lastDamageEffect == STALFOS_DMGEFF_STUN) {
+        stunDuration = 8;
+    }
     if (this->lastDamageEffect == STALFOS_DMGEFF_LIGHT) {
-        Actor_SetColorFilter(&this->actor, -0x8000, 0x78, 0, 0x50);
+        Actor_SetColorFilter(&this->actor, -0x8000, 0x78, 0, stunDuration);
     } else {
-        Actor_SetColorFilter(&this->actor, 0, 0x78, 0, 0x50);
+        Actor_SetColorFilter(&this->actor, 0, 0x78, 0, stunDuration);
 
         if (this->lastDamageEffect == STALFOS_DMGEFF_FREEZE) {
             this->iceTimer = 36;
@@ -1598,7 +1804,12 @@ void EnTest_SetupRecoil(EnTest* this) {
     this->unk_7C8 = 0x13;
     this->skelAnime.playSpeed = -1.0f;
     this->skelAnime.startFrame = this->skelAnime.curFrame;
-    this->skelAnime.endFrame = 0.0f;
+    //ipi: Recover faster
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->skelAnime.curFrame > 3.0f) {
+        this->skelAnime.endFrame = this->skelAnime.curFrame - 3.0f;
+    } else {
+        this->skelAnime.endFrame = 0.0f;
+    }
     EnTest_SetupAction(this, EnTest_Recoil);
 }
 
@@ -1606,7 +1817,8 @@ void EnTest_Recoil(EnTest* this, PlayState* play) {
     if (SkelAnime_Update(&this->skelAnime)) {
         if (Rand_ZeroOne() > 0.7f) {
             EnTest_SetupIdle(this);
-            this->timer = (Rand_ZeroOne() * 5.0f) + 5.0f;
+            //ipi: Allow us to exit idle state immediately if we see an opportunity
+            this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 0 : (Rand_ZeroOne() * 5.0f) + 5.0f;
         } else if (((play->gameplayFrames % 2) != 0) && (this->actor.params != STALFOS_TYPE_CEILING)) {
             EnTest_SetupJumpBack(this);
         } else {
@@ -1665,6 +1877,10 @@ void EnTest_UpdateDamage(EnTest* this, PlayState* play) {
     } else if (this->bodyCollider.base.acFlags & AC_HIT) {
         this->bodyCollider.base.acFlags &= ~AC_HIT;
 
+        //ipi: If dodging, ignore the attack
+        if (CVarGetInteger("gIpiCrazyMode", 0) && (this->actionFunc == EnTest_JumpBack || this->actionFunc == EnTest_JumpUp)) {
+            return;
+        }
         if ((this->actor.colChkInfo.damageEffect != STALFOS_DMGEFF_SLING) &&
             (this->actor.colChkInfo.damageEffect != STALFOS_DMGEFF_FIREMAGIC)) {
             this->lastDamageEffect = this->actor.colChkInfo.damageEffect;
@@ -1689,13 +1905,13 @@ void EnTest_UpdateDamage(EnTest* this, PlayState* play) {
                         Enemy_StartFinishingBlow(play, &this->actor);
                         func_80862FA8(this, play);
                     } else {
-                        func_80862154(this);
+                        func_80862154(this, play);
                     }
                 } else if (Actor_ApplyDamage(&this->actor) == 0) {
                     func_808630F0(this, play);
                     Enemy_StartFinishingBlow(play, &this->actor);
                 } else {
-                    func_80862398(this);
+                    func_80862398(this, play);
                 }
             }
         }
@@ -2058,6 +2274,23 @@ s32 EnTest_ReactToProjectile(PlayState* play, EnTest* this) {
         }
 
         return true;
+    }
+
+    //ipi: Also check for player crouch stabs
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (EnTest_IsPlayerAboutToCrouchStab(this, GET_PLAYER(play))) {
+            this->actor.shape.rot.y = this->actor.world.rot.y = this->actor.yawTowardsPlayer;
+            if (this->actor.params != STALFOS_TYPE_CEILING) {
+                if (this->actor.bgCheckFlags & 8) {
+                    EnTest_SetupJumpUp(this);
+                } else {
+                    EnTest_SetupJumpBack(this);
+                }
+            } else {
+                EnTest_SetupStopAndBlock(this);
+            }
+            return true;
+        }
     }
 
     return false;

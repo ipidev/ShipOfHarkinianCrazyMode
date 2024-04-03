@@ -104,42 +104,6 @@ static DamageTable sDamageTable = {
     /* Unknown 2     */ DMG_ENTRY(0, 0x0),
 };
 
-//ipi: Duplicate damage table except for explosives
-static DamageTable sIpiCrazyModeDamageTable = {
-    /* Deku nut      */ DMG_ENTRY(0, 0x1),
-    /* Deku stick    */ DMG_ENTRY(2, 0xF),
-    /* Slingshot     */ DMG_ENTRY(1, 0xF),
-    /* Explosive     */ DMG_ENTRY(0, 0x0),
-    /* Boomerang     */ DMG_ENTRY(0, 0x1),
-    /* Normal arrow  */ DMG_ENTRY(2, 0xF),
-    /* Hammer swing  */ DMG_ENTRY(2, 0xF),
-    /* Hookshot      */ DMG_ENTRY(0, 0x1),
-    /* Kokiri sword  */ DMG_ENTRY(1, 0xE),
-    /* Master sword  */ DMG_ENTRY(2, 0xF),
-    /* Giant's Knife */ DMG_ENTRY(4, 0xF),
-    /* Fire arrow    */ DMG_ENTRY(4, 0x7),
-    /* Ice arrow     */ DMG_ENTRY(2, 0xF),
-    /* Light arrow   */ DMG_ENTRY(2, 0xF),
-    /* Unk arrow 1   */ DMG_ENTRY(2, 0xF),
-    /* Unk arrow 2   */ DMG_ENTRY(0, 0x0),
-    /* Unk arrow 3   */ DMG_ENTRY(0, 0x0),
-    /* Fire magic    */ DMG_ENTRY(4, 0x7),
-    /* Ice magic     */ DMG_ENTRY(0, 0x6),
-    /* Light magic   */ DMG_ENTRY(3, 0xD),
-    /* Shield        */ DMG_ENTRY(0, 0x0),
-    /* Mirror Ray    */ DMG_ENTRY(0, 0x0),
-    /* Kokiri spin   */ DMG_ENTRY(1, 0xD),
-    /* Giant spin    */ DMG_ENTRY(4, 0xF),
-    /* Master spin   */ DMG_ENTRY(2, 0xF),
-    /* Kokiri jump   */ DMG_ENTRY(2, 0xF),
-    /* Giant jump    */ DMG_ENTRY(8, 0xF),
-    /* Master jump   */ DMG_ENTRY(4, 0xF),
-    /* Unknown 1     */ DMG_ENTRY(0, 0x0),
-    /* Unblockable   */ DMG_ENTRY(0, 0x0),
-    /* Hammer jump   */ DMG_ENTRY(4, 0xF),
-    /* Unknown 2     */ DMG_ENTRY(0, 0x0),
-};
-
 const ActorInit En_Skb_InitVars = {
     ACTOR_EN_SKB,
     ACTORCAT_ENEMY,
@@ -187,8 +151,7 @@ void EnSkb_Init(Actor* thisx, PlayState* play) {
     s16 paramOffsetArm;
 
     Actor_ProcessInitChain(&this->actor, sInitChain);
-    //ipi: Use separate damage table in crazy mode
-    this->actor.colChkInfo.damageTable = CVarGetInteger("gIpiCrazyMode", 0) ? &sIpiCrazyModeDamageTable : &sDamageTable;
+    this->actor.colChkInfo.damageTable = &sDamageTable;
     ActorShape_Init(&this->actor.shape, 0.0f, ActorShadow_DrawCircle, 0.0f);
     this->actor.focus.pos = this->actor.world.pos;
     this->actor.colChkInfo.mass = 0xFE;
@@ -200,6 +163,13 @@ void EnSkb_Init(Actor* thisx, PlayState* play) {
 
     Collider_InitJntSph(play, &this->collider);
     Collider_SetJntSph(play, &this->collider, &this->actor, &sJntSphInit, this->colliderItem);
+    //ipi: If params are negative, don't play digging animation and don't despawn in the day
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params < 0) {
+        this->actor.params = -(this->actor.params);
+        this->remainsDuringDay = true;
+    } else {
+        this->remainsDuringDay = false;
+    }
     Actor_SetScale(&this->actor, ((this->actor.params * 0.1f) + 1.0f) * 0.01f);
 
     paramOffsetBody = this->actor.params + 0xA;
@@ -232,7 +202,7 @@ void EnSkb_Destroy(Actor* thisx, PlayState* play) {
 
 void func_80AFCD60(EnSkb* this) {
     // Don't despawn stallchildren during daytime when enemy randomizer is enabled.
-    if (IS_DAY && !CVarGetInteger("gRandomizedEnemies", 0)) {
+    if (IS_DAY && !CVarGetInteger("gRandomizedEnemies", 0) && !this->remainsDuringDay) {
         func_80AFCF48(this);
     } else if (Actor_IsFacingPlayer(&this->actor, 0x11C7) &&
                (this->actor.xzDistToPlayer < (60.0f + (this->actor.params * 6.0f)))) {
@@ -334,7 +304,8 @@ void EnSkb_Advance(EnSkb* this, PlayState* play) {
         }
     }
     // Don't despawn stallchildren during daytime or when a stalchildren walks too far away from his "home" when enemy randomizer is enabled.
-    if ((Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos) > 800.0f || IS_DAY) && !CVarGetInteger("gRandomizedEnemies", 0)) {
+    if ((Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos) > 800.0f || IS_DAY) &&
+        !CVarGetInteger("gRandomizedEnemies", 0) && !this->remainsDuringDay) {
         func_80AFCF48(this);
     } else if (Actor_IsFacingPlayer(&this->actor, 0x11C7) &&
                (this->actor.xzDistToPlayer < (60.0f + (this->actor.params * 6.0f)))) {
@@ -372,6 +343,8 @@ void EnSkb_SetupAttack(EnSkb* this, PlayState* play) {
             if (bomb != NULL) {
                 bomb->timer = 15;
                 bomb->bombCollider.base.ocFlags2 = 0;   //Don't explode on contact with enemies
+                bomb->explosionCollider.base.atFlags &= ~AT_TYPE_PLAYER;    //Don't deal damage to enemies
+                Actor_SetScale(&bomb->actor, 0.01f);
                 bomb->actor.velocity.y = 10.0f;
                 bomb->actor.speedXZ = 10.0f;
             }

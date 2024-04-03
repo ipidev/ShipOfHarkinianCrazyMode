@@ -22,6 +22,8 @@ typedef struct EnSkb {
     /* 0x028C */ BodyBreak bodyBreak; 
     /* 0x02A4 */ ColliderJntSph collider;
     /* 0x02C4 */ ColliderJntSphElement colliderItem[2];
+    //ipi: Flag to remain during the daytime and while away from home
+                 u8 remainsDuringDay;
 } EnSkb; // size = 0x0344
 
 #endif
