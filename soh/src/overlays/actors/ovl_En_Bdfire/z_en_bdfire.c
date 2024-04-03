@@ -89,28 +89,39 @@ void func_809BC2A4(EnBdfire* this, PlayState* play) {
     this->actor.world.pos.x = kingDodongo->firePos.x;
     this->actor.world.pos.y = kingDodongo->firePos.y;
     this->actor.world.pos.z = kingDodongo->firePos.z;
+    //ipi: Faster!
+    f32 speedMult = CVarGetInteger("gIpiCrazyMode", 0) ? 4 : 1;
     if (kingDodongo->unk_1E2 == 0) {
-        Math_SmoothStepToF(&this->actor.scale.x, 0.0f, 1.0f, 0.6f, 0.0f);
-        if (Math_SmoothStepToF(&this->unk_18C, 0.0f, 1.0f, 20.0f, 0.0f) == 0.0f) {
+        Math_SmoothStepToF(&this->actor.scale.x, 0.0f, 1.0f, 0.6f * speedMult, 0.0f);
+        if (Math_SmoothStepToF(&this->unk_18C, 0.0f, 1.0f, 20.0f * speedMult, 0.0f) == 0.0f) {
             Actor_Kill(&this->actor);
         }
     } else {
         if (this->unk_154 < 70) {
-            Math_SmoothStepToF(&this->unk_18C, 128.0f, 0.1f, 1.5f, 0.0f);
+            Math_SmoothStepToF(&this->unk_18C, 128.0f, 0.1f, 1.5f * speedMult, 0.0f);
             Math_SmoothStepToF(&this->unk_190, 255.0f, 1.0f, 3.8249998f, 0.0f);
-            Math_SmoothStepToF(&this->unk_194, 100.0f, 1.0f, 1.5f, 0.0f);
+            Math_SmoothStepToF(&this->unk_194, 100.0f, 1.0f, 1.5f * speedMult, 0.0f);
         }
         if (this->unk_154 == 0) {
             temp = 0;
         } else {
-            this->unk_154--;
+            //ipi: Count down faster to stay in sync with KD
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                if (this->unk_154 >= 4) {
+                    this->unk_154 -= 4;
+                } else {
+                    this->unk_154 = 0;
+                }
+            } else {
+                this->unk_154--;
+            }
             temp = this->unk_154;
         }
         if (temp == 0) {
-            Math_SmoothStepToF(&this->actor.scale.x, 0.0f, 1.0f, 0.3f, 0.0f);
-            Math_SmoothStepToF(&this->unk_190, 0.0f, 1.0f, 25.5f, 0.0f);
-            Math_SmoothStepToF(&this->unk_194, 0.0f, 1.0f, 10.0f, 0.0f);
-            if (Math_SmoothStepToF(&this->unk_18C, 0.0f, 1.0f, 10.0f, 0.0f) == 0.0f) {
+            Math_SmoothStepToF(&this->actor.scale.x, 0.0f, 1.0f, 0.3f * speedMult, 0.0f);
+            Math_SmoothStepToF(&this->unk_190, 0.0f, 1.0f, 25.5f * speedMult, 0.0f);
+            Math_SmoothStepToF(&this->unk_194, 0.0f, 1.0f, 10.0f * speedMult, 0.0f);
+            if (Math_SmoothStepToF(&this->unk_18C, 0.0f, 1.0f, 10.0f * speedMult, 0.0f) == 0.0f) {
                 Actor_Kill(&this->actor);
             }
         }

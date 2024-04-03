@@ -44,6 +44,9 @@ f32 func_808C50A8(BossDodongo* this, PlayState* play);
 void BossDodongo_DrawEffects(PlayState* play);
 void BossDodongo_UpdateEffects(PlayState* play);
 
+//ipi: Speed up his pathetically slow attack
+static s16 sCrazyModeAttackSpeed = 4;
+
 const ActorInit Boss_Dodongo_InitVars = {
     ACTOR_BOSS_DODONGO,
     ACTORCAT_BOSS,
@@ -675,7 +678,13 @@ void BossDodongo_SetupInhale(BossDodongo* this) {
     Animation_Change(&this->skelAnime, &object_kingdodongo_Anim_008EEC, 1.0f, 0.0f,
                      Animation_GetLastFrame(&object_kingdodongo_Anim_008EEC), ANIMMODE_ONCE, -5.0f);
     this->actionFunc = BossDodongo_Inhale;
-    this->unk_1DA = 100;
+    //ipi: Speed up his pathetically slow animation
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed = sCrazyModeAttackSpeed;
+        this->unk_1DA = 100 / sCrazyModeAttackSpeed;
+    } else {
+        this->unk_1DA = 100;
+    }
     this->unk_1AC = 0;
     this->unk_1E2 = 1;
 }
@@ -798,7 +807,10 @@ void BossDodongo_BlowFire(BossDodongo* this, PlayState* play) {
 void BossDodongo_Inhale(BossDodongo* this, PlayState* PlayState) {
     this->unk_1E2 = 1;
 
-    if (this->unk_1AC > 20) {
+    //ipi: Use shorter timers
+    s16 breathStartTime = CVarGetInteger("gIpiCrazyMode", 0) ? 20 / sCrazyModeAttackSpeed : 20 ;
+    s16 breathEndTime = CVarGetInteger("gIpiCrazyMode", 0) ? 82 / sCrazyModeAttackSpeed : 82;
+    if (this->unk_1AC > breathStartTime) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_DODO_K_BREATH - SFX_FLAG);
     }
 
@@ -810,7 +822,7 @@ void BossDodongo_Inhale(BossDodongo* this, PlayState* PlayState) {
     } else {
         this->unk_1AC++;
 
-        if ((this->unk_1AC > 20) && (this->unk_1AC < 82) && BossDodongo_AteExplosive(this, PlayState)) {
+        if ((this->unk_1AC > breathStartTime) && (this->unk_1AC < breathEndTime) && BossDodongo_AteExplosive(this, PlayState)) {
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_DODO_K_DRINK);
             BossDodongo_SetupExplode(this);
         }
