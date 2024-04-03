@@ -88,6 +88,11 @@ void EnSkjneedle_Update(Actor* thisx, PlayState* play2) {
     }
     if (EnSkjNeedle_CollisionCheck(this) || this->killTimer == 0) {
         Actor_Kill(&this->actor);
+        //ipi: Instantly kill the player if we hit them
+        if (CVarGetInteger("gIpiCrazyMode", 0) && this->collider.base.at == GET_PLAYER(play)) {
+            gSaveContext.health = 0;
+            play->damagePlayer(play, -2);
+        }
     } else {
         Actor_SetScale(&this->actor, 0.01f);
         Collider_UpdateCylinder(&this->actor, &this->collider);
