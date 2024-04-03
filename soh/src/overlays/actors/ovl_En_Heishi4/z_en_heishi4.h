@@ -35,6 +35,8 @@ typedef struct EnHeishi4 {
     /* 0x02B4 */ u8 unk_2B4;
     /* 0x02B6 */ char unk_2B6[7];
     /* 0x02BC */ ColliderCylinder collider;
+    //ipi: Extra cylinder for shockwave hitbox
+                 ColliderCylinder shockwaveCollider;
 } EnHeishi4; // size = 0x0308
 
 #endif

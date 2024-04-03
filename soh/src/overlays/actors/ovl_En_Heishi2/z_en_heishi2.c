@@ -50,6 +50,13 @@ void func_80A546DC(EnHeishi2* this, PlayState* play);
 void func_80A541FC(EnHeishi2* this, PlayState* play);
 void func_80A53DF8(EnHeishi2* this, PlayState* play);
 
+//ipi: Extra functions to retaliate against the player attacking a guard
+void EnHeishi2_InitializeRetaliation(EnHeishi2* this);
+void EnHeishi2_SetupTargetPlayer(EnHeishi2* this);
+void EnHeishi2_TargetPlayer(EnHeishi2* this, PlayState* play);
+void EnHeishi2_SetupAttackGround(EnHeishi2* this);
+void EnHeishi2_AttackGround(EnHeishi2* this, PlayState* play);
+
 const ActorInit En_Heishi2_InitVars = {
     ACTOR_EN_HEISHI2,
     ACTORCAT_NPC,
@@ -81,6 +88,27 @@ static ColliderCylinderInit sCylinderInit = {
         OCELEM_ON,
     },
     { 33, 40, 0, { 0, 0, 0 } },
+};
+
+//ipi: Extra cylinder for shockwave hitbox
+static ColliderCylinderInit sCrazyModeShockwaveCylinderInit = {
+    {
+        COLTYPE_NONE,
+        AT_ON | AT_TYPE_ENEMY,
+        AC_NONE,
+        OC1_NONE,
+        OC2_TYPE_2,
+        COLSHAPE_CYLINDER,
+    },
+    {
+        ELEMTYPE_UNK0,
+        { 0xFFCFFFFF, 0x04, 0x10 },
+        { 0x00000000, 0x00, 0x00 },
+        TOUCH_ON | TOUCH_SFX_NONE,
+        BUMP_NONE,
+        OCELEM_NONE,
+    },
+    { 60, 20, 0, { 0, 0, 0 } },
 };
 
 void EnHeishi2_Init(Actor* thisx, PlayState* play) {
@@ -157,7 +185,20 @@ void EnHeishi2_Init(Actor* thisx, PlayState* play) {
         osSyncPrintf(VT_FGCOL(YELLOW) " ☆☆☆☆☆ 識別完了！         ☆☆☆☆☆ %d\n" VT_RST, this->type);
         // "Message completed!"
         osSyncPrintf(VT_FGCOL(PURPLE) " ☆☆☆☆☆ メッセージ完了！   ☆☆☆☆☆ %x\n\n" VT_RST, (this->actor.params >> 8) & 0xF);
+    
+        //ipi: Guards are damagable
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            Actor_CrazyModeInitCivilianDamage(&this->collider);
+            //Also create shockwave hitbox
+            Collider_InitCylinder(play, &this->shockwaveCollider);
+            Collider_SetCylinder(play, &this->shockwaveCollider, thisx, &sCrazyModeShockwaveCylinderInit);
+        }
     }
+
+    //ipi: Use unused fields to represent retaliation state
+    this->unk_2E8[0] = 0; //Is retaliating?
+    this->unk_2E8[1] = 0; //Retaliation action timer
+    this->unk_2E8[2] = 0; //Activating shockwave hitbox
 }
 
 void EnHeishi2_Destroy(Actor* thisx, PlayState* play) {
@@ -763,6 +804,101 @@ void func_80A549E8(EnHeishi2* this, PlayState* play) {
     }
 }
 
+//ipi: Extra functions to retaliate against the player attacking a guard
+void EnHeishi2_SetupInitializeRetaliation(EnHeishi2* this) {
+    this->actor.flags &= ~ACTOR_FLAG_FRIENDLY;
+    this->actor.flags |= ACTOR_FLAG_HOSTILE;
+    this->unk_2E8[0] = 1; //Now retaliating
+    this->unk_2E8[1] = 30; //Timer to shockwave attack
+    //Setup attack
+    this->collider.base.atFlags = AT_ON | AT_TYPE_ENEMY;
+    this->collider.info.toucherFlags = TOUCH_ON;
+    this->collider.info.toucher.dmgFlags = 0xFFCFFFFF;
+    this->collider.info.toucher.damage = 0x10;
+    this->collider.info.toucher.effect = 0;
+    //Play miniboss music if not already playing
+    if (func_800FA0B4(SEQ_PLAYER_BGM_MAIN) != NA_BGM_MINI_BOSS) {
+        func_800F5ACC(NA_BGM_MINI_BOSS);
+    }
+    func_80078884(NA_SE_SY_FOUND);
+    EnHeishi2_SetupTargetPlayer(this);
+}
+
+void EnHeishi2_SetupTargetPlayer(EnHeishi2* this) {
+    f32 frameCount = Animation_GetLastFrame(&gEnHeishiWalkAnim);
+    Animation_Change(&this->skelAnime, &gEnHeishiWalkAnim, 1.0f, 0.0f, (s16)frameCount, ANIMMODE_LOOP, -10.0f);
+
+    this->actor.speedXZ = 0.0f;
+    this->actor.gravity = -2.0f;
+    this->unk_2E8[1] = 35; //Timer to shockwave attack
+    this->unk_2E8[2] = 0; //Shockwave hitbox is not active
+    this->actionFunc = EnHeishi2_TargetPlayer;
+}
+
+void EnHeishi2_TargetPlayer(EnHeishi2* this, PlayState* play) {
+    //Accelerate towards player
+    SkelAnime_Update(&this->skelAnime);
+    Math_StepToF(&this->actor.speedXZ, 5.0f, 0.5f);
+    Math_ApproachS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 3, 0x1000);
+    this->actor.shape.rot.y = this->actor.world.rot.y;
+
+    //Play walking sounds
+    if (Animation_OnFrame(&this->skelAnime, 1.0f) || Animation_OnFrame(&this->skelAnime, 17.0f)) {
+        Audio_PlayActorSound2(&this->actor, NA_SE_EV_KNIGHT_WALK);
+    }
+
+    if (this->unk_2E8[1] > 0) {
+        this->unk_2E8[1]--;
+    } else {
+        //Attack if the player is within range
+        if (this->actor.xzDistToPlayer < 150.0f && ABS(this->actor.yDistToPlayer) < 30.0f &&
+            this->actor.bgCheckFlags & 1) {
+            EnHeishi2_SetupAttackGround(this);
+        }
+    }
+}
+
+void EnHeishi2_SetupAttackGround(EnHeishi2* this) {
+    f32 frameCount = Animation_GetLastFrame(&gEnHeishiSlamSpearAnim);
+    Animation_Change(&this->skelAnime, &gEnHeishiSlamSpearAnim, 1.0f, 0.0f, frameCount, ANIMMODE_ONCE, -10.0f);
+
+    this->actor.speedXZ = 0.0f;
+    this->actor.velocity.y = 8.0f;
+    this->actor.gravity = -1.0f;
+    this->unk_2E8[2] = 0; //Shockwave hitbox is not active
+    this->actionFunc = EnHeishi2_AttackGround;
+}
+
+void EnHeishi2_AttackGround(EnHeishi2* this, PlayState* play) {
+    static Vec3f sZero;
+    //Create shockwave
+    if (this->skelAnime.curFrame >= 12.0f) {
+        if (this->unk_2E8[2] == 0) {
+            Audio_PlayActorSound2(&this->actor, NA_SE_EV_STONE_BOUND);
+            //Create effect
+            Vec3f effectPos;
+            effectPos.x = this->actor.world.pos.x;
+            effectPos.y = this->actor.world.pos.y + 20.0f;
+            effectPos.z = this->actor.world.pos.z;
+            EffectSsBlast_SpawnWhiteShockwave(play, &effectPos, &sZero, &sZero);
+            //Shake camera
+            s16 quake = Quake_Add(GET_ACTIVE_CAM(play), 3);
+            Quake_SetSpeed(quake, -0x3CB0);
+            Quake_SetQuakeValues(quake, 3, 0, 0, 0);
+            Quake_SetCountdown(quake, 0xC);
+        }
+        this->unk_2E8[2]++;
+        //Activate and modify shockwave hitbox
+        if (this->unk_2E8[2] <= 5) {
+            this->shockwaveCollider.dim.radius = 60 + (this->unk_2E8[2] * 20);
+        }
+    }
+    //Return to running at the player
+    if (SkelAnime_Update(&this->skelAnime)) {
+        EnHeishi2_SetupTargetPlayer(this);
+    }
+}
+
 void EnHeishi2_Update(Actor* thisx, PlayState* play) {
     s32 pad;
     EnHeishi2* this = (EnHeishi2*)thisx;
@@ -790,9 +926,27 @@ void EnHeishi2_Update(Actor* thisx, PlayState* play) {
         case 9:
             break;
         default:
-            Actor_UpdateBgCheckInfo(play, &this->actor, 10.0f, 10.0f, 30.0f, 0x1D);
+             //ipi: Needs to be higher, otherwise guard always thinks he's stuck in a wall
+            f32 wallCheckHeight = this->unk_2E8[0] ? 20.0f : 10.0f;
+            Actor_UpdateBgCheckInfo(play, &this->actor, wallCheckHeight, 10.0f, 30.0f, 0x1D);
             Collider_UpdateCylinder(&this->actor, &this->collider);
             CollisionCheck_SetOC(play, &play->colChkCtx, &this->collider.base);
+            //ipi: Retaliate upon being damaged by the player
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                if (this->unk_2E8[0] == 0 && this->collider.base.acFlags & AC_HIT &&
+                    Message_GetState(&play->msgCtx) == TEXT_STATE_NONE) {
+                    this->collider.base.acFlags &= ~AC_HIT;
+                    EnHeishi2_SetupInitializeRetaliation(this);
+                } else if (this->unk_2E8[0] != 0) {
+                    CollisionCheck_SetAT(play, &play->colChkCtx, &this->collider.base);
+                }
+                CollisionCheck_SetAC(play, &play->colChkCtx, &this->collider.base);
+                //Only update shockwave collision if needed
+                if (this->unk_2E8[2] != 0) {
+                    Collider_UpdateCylinder(&this->actor, &this->shockwaveCollider);
+                    CollisionCheck_SetAT(play, &play->colChkCtx, &this->shockwaveCollider.base);
+                }
+            }
             break;
     }
 }
