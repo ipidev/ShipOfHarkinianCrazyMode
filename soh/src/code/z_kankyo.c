@@ -1297,6 +1297,36 @@ void Environment_Update(PlayState* play, EnvironmentContext* envCtx, LightContex
             envCtx->dirLight2.params.dir.x = 1;
         }
     }
+
+    //ipi: Replace BGM with ambience if all NPCs are killed in certain areas
+    if (CVarGetInteger("gIpiCrazyMode", 0) && !Environment_IsForcedSequenceDisabled()) {
+        u8 isValidScene = false;
+        u8 npcCount = 0;
+        Actor* npc = play->actorCtx.actorLists[ACTORCAT_NPC].head;
+        if (play->sceneNum == SCENE_MARKET_DAY) {
+            //Market
+            isValidScene = true;
+            while (npc != NULL) {
+                if (npc->id == ACTOR_EN_HY || npc->id == ACTOR_EN_NIW_GIRL) {
+                    npcCount++;
+                }
+                npc = npc->next;
+            }
+        } else if (play->sceneNum == SCENE_KOKIRI_FOREST && LINK_IS_CHILD) {
+            //Kokiri Forest (child only)
+            isValidScene = true;
+            while (npc != NULL) {
+                if (npc->id == ACTOR_EN_KO || npc->id == ACTOR_EN_MD) {
+                    npcCount++;
+                }
+                npc = npc->next;
+            }
+        }
+        if (isValidScene && npcCount == 0) {
+            Environment_ForcePlaySequence(NA_BGM_DISABLED);
+            Audio_PlayNatureAmbienceSequence(NATURE_ID_MARKET_RUINS);
+        }
+    }
 }
 
 void Environment_DrawSunAndMoon(PlayState* play) {

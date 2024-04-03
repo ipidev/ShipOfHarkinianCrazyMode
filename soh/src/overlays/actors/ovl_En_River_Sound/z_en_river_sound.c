@@ -205,6 +205,21 @@ void EnRiverSound_Update(Actor* thisx, PlayState* play) {
     } else if (play->sceneNum == SCENE_DODONGOS_CAVERN_BOSS && Flags_GetClear(play, thisx->room)) {
         Actor_Kill(thisx);
     }
+
+    //ipi: Remove crowd sound if all NPCs are killed
+    if (CVarGetInteger("gIpiCrazyMode", 0) && thisx->params == RS_MARKET_CROWD) {
+        u8 npcCount = 0;
+        Actor* npc = play->actorCtx.actorLists[ACTORCAT_NPC].head;
+        while (npc != NULL) {
+            if (npc->id == ACTOR_EN_HY || npc->id == ACTOR_EN_NIW_GIRL) {
+                npcCount++;
+            }
+            npc = npc->next;
+        }
+        if (npcCount == 0) {
+            Actor_Kill(&this->actor);
+        }
+    }
 }
 
 void EnRiverSound_Draw(Actor* thisx, PlayState* play) {
