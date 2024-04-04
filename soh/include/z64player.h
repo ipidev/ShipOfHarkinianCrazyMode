@@ -681,6 +681,8 @@ typedef struct Player {
     // #endregion
     u8 ivanFloating;
     u8 ivanDamageMultiplier;
+    //ipi: Extra flag to not create ice crystal while frozen
+    u8 frozenByStun;
 } Player; // size = 0xA94
 
 #endif

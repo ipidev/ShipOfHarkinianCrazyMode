@@ -361,6 +361,9 @@ void Player_Action_80850C68(Player* this, PlayState* play);
 void Player_Action_80850E84(Player* this, PlayState* play);
 void Player_Action_CsAction(Player* this, PlayState* play);
 
+//ipi: Additional action to remain stunned
+void Player_Action_Stunned(Player* this, PlayState* play);
+
 // .bss part 1
 static s32 D_80858AA0;
 static s32 D_80858AA4;
@@ -4093,7 +4096,19 @@ void func_80837C0C(PlayState* play, Player* this, s32 arg2, f32 arg3, f32 arg4, 
 
     func_80837AE0(this, arg6);
 
-    if (arg2 == 3) {
+    //ipi: New argument value to stun player instead of freezing them
+    if (CVarGetInteger("gIpiCrazyMode", 0) && arg2 == 5) {
+        Player_SetupAction(play, this, Player_Action_Stunned, 0);
+        this->frozenByStun = true;
+
+        anim = &gPlayerAnim_link_normal_ice_down;
+
+        func_80832224(this);
+        Player_RequestRumble(this, 255, 10, 40, 0);
+
+        Player_PlaySfx(this, NA_SE_EN_GOMA_JR_FREEZE);
+        func_80832698(this, NA_SE_VO_LI_FREEZE);
+    } else if (arg2 == 3) {
         Player_SetupAction(play, this, Player_Action_8084FB10, 0);
 
         anim = &gPlayerAnim_link_normal_ice_down;
@@ -4386,6 +4401,9 @@ s32 func_808382DC(Player* this, PlayState* play) {
 
                 if (this->stateFlags1 & PLAYER_STATE1_IN_WATER) {
                     sp4C = 0;
+                } else if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.colChkInfo.acHitEffect == 5) {
+                    //ipi: Additional stun damage type
+                    sp4C = 5;
                 } else if (this->actor.colChkInfo.acHitEffect == 2) {
                     sp4C = 3;
                 } else if (this->actor.colChkInfo.acHitEffect == 3) {
@@ -11978,7 +11996,8 @@ void Player_Draw(Actor* thisx, PlayState* play2) {
             POLY_OPA_DISP = Play_SetFog(play, POLY_OPA_DISP);
         }
 
-        if (this->stateFlags2 & PLAYER_STATE2_FROZEN) {
+        //ipi: Extra check to make sure we aren't frozen by being stunned
+        if (this->stateFlags2 & PLAYER_STATE2_FROZEN && !this->frozenByStun) {
             f32 scale = (this->av1.actionVar1 >> 1) * 22.0f;
 
             gSPSegment(POLY_XLU_DISP++, 0x08,
@@ -14394,6 +14413,24 @@ void Player_Action_8084FB10(Player* this, PlayState* play) {
 
         if ((play->gameplayFrames % 4) == 0) {
             Player_InflictDamage(play, -1);
+        }
+    } else {
+        if (LinkAnimation_Update(play, &this->skelAnime)) {
+            func_80839F90(this, play);
+            func_80837AFC(this, -20);
+        }
+    }
+}
+
+//ipi: Additional action to remain stunned
+void Player_Action_Stunned(Player* this, PlayState* play) {
+    if (this->av1.actionVar1 >= 0) {
+        if (this->av1.actionVar1 < 8) {
+            this->av1.actionVar1++;
+            this->stateFlags2 |= PLAYER_STATE2_FROZEN;
+        } else {
+            this->av1.actionVar1 = -1;
+            this->frozenByStun = false;
         }
     } else {
         if (LinkAnimation_Update(play, &this->skelAnime)) {
