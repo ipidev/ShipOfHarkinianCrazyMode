@@ -131,6 +131,27 @@ static ColliderQuadInit sQuadInit = {
     { { { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } } },
 };
 
+//ipi: Extra cylinder for shockwave hitbox
+static ColliderCylinderInit sCrazyModeShockwaveCylinderInit = {
+    {
+        COLTYPE_NONE,
+        AT_NONE,
+        AC_NONE,
+        OC1_ON | OC1_NO_PUSH | OC1_TYPE_PLAYER,
+        OC2_TYPE_2,
+        COLSHAPE_CYLINDER,
+    },
+    {
+        ELEMTYPE_UNK0,
+        { 0xFCFFFFFF, 0x00, 0x00 },
+        { 0x00000000, 0x00, 0x00 },
+        TOUCH_NONE,
+        BUMP_NONE,
+        OCELEM_ON,
+    },
+    { 50, 20, 0, { 0, 0, 0 } },
+};
+
 static DamageTable sDamageTable = {
     /* Deku nut      */ DMG_ENTRY(0, 0xD),
     /* Deku stick    */ DMG_ENTRY(2, 0xF),
@@ -215,6 +236,15 @@ void func_80A74398(Actor* thisx, PlayState* play) {
         Actor_SetScale(thisx, 0.012f);
         thisx->naviEnemyId = 0x35;
         Actor_ChangeCategory(play, &play->actorCtx, thisx, ACTORCAT_ENEMY);
+    }
+
+    //ipi: More health!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        thisx->colChkInfo.health += 10;
+
+        //Also create shockwave hitbox
+        Collider_InitCylinder(play, &this->shockwaveCollider);
+        Collider_SetCylinder(play, &this->shockwaveCollider, thisx, &sCrazyModeShockwaveCylinderInit);
     }
 
     blureInit.p1StartColor[0] = blureInit.p1StartColor[1] = blureInit.p2StartColor[0] = blureInit.p2StartColor[1] =
@@ -356,7 +386,13 @@ void func_80A74AAC(EnIk* this) {
         Animation_Change(&this->skelAnime, &gIronKnuckleRunAnim, 1.0f, 0.0f,
                          Animation_GetLastFrame(&gIronKnuckleRunAnim), ANIMMODE_LOOP, -4.0f);
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_IRONNACK_DASH);
-        this->actor.speedXZ = 2.5f;
+        //ipi: Faster!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->actor.speedXZ = 4.0f;
+            this->skelAnime.playSpeed = 1.5f;
+        } else {
+            this->actor.speedXZ = 2.5f;
+        }
     }
     this->actor.world.rot.y = this->actor.shape.rot.y;
     EnIk_SetupAction(this, func_80A74BA4);
@@ -370,14 +406,28 @@ void func_80A74BA4(EnIk* this, PlayState* play) {
     s16 sp2E;
     s16 phi_a3;
 
+    //ipi: Turn much faster if the player is extremely close to us
+    u8 isPlayerClose = this->actor.xzDistToPlayer < 70.0f;
     if (this->unk_2FB == 0) {
-        temp_t0 = 0xAAA;
-        phi_a3 = 0x320;
+        //ipi: Armoured Iron Knuckles turn slightly faster. Attack angle slightly increased
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            temp_t0 = 0x1000;
+            phi_a3 = isPlayerClose ? 0x1000 : 0x480;
+        } else {
+            temp_t0 = 0xAAA;
+            phi_a3 = 0x320;
+        }
         sp30 = 0;
         sp2E = 0x10;
     } else {
-        temp_t0 = 0x3FFC;
-        phi_a3 = 0x4B0;
+        //ipi: Unarmoured Iron Knuckles turn much faster. Attack angle can be reduced for increased accuracy
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            temp_t0 = 0x2000;
+            phi_a3 = isPlayerClose ? 0x1800 : 0x1000;
+        } else {
+            temp_t0 = 0x3FFC;
+            phi_a3 = 0x4B0;
+        }
         sp30 = 2;
         sp2E = 9;
     }
@@ -392,7 +442,9 @@ void func_80A74BA4(EnIk* this, PlayState* play) {
     yawDiff = this->actor.yawTowardsPlayer - this->actor.shape.rot.y;
     if ((ABS(yawDiff) <= temp_t0) && (this->actor.xzDistToPlayer < 100.0f)) {
         if (ABS(this->actor.yDistToPlayer) < 150.0f) {
-            if ((play->gameplayFrames & 1)) {
+            //ipi: Prefer the vertical attack if the player is directly in front of us or very close to us
+            u8 preferVerticalAttack = CVarGetInteger("gIpiCrazyMode", 0) && (yawDiff < 0x800 || isPlayerClose);
+            if ((play->gameplayFrames & 1) || preferVerticalAttack) {
                 func_80A74E2C(this);
             } else {
                 func_80A751C8(this);
@@ -428,14 +480,20 @@ void func_80A74E2C(EnIk* this) {
     this->actor.speedXZ = 0.0f;
     Animation_Change(&this->skelAnime, &gIronKnuckleVerticalAttackAnim, 1.5f, 0.0f, frames, ANIMMODE_ONCE, -4.0f);
     EnIk_SetupAction(this, func_80A74EBC);
+    //ipi: Faster!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->skelAnime.playSpeed = 2.5f;
+    }
 }
 
 void func_80A74EBC(EnIk* this, PlayState* play) {
     Vec3f sp2C;
 
-    if (this->skelAnime.curFrame == 15.0f) {
+    //ipi: Use previous/current frame checks rather than checking exact float values
+    f32 prevFrame = this->skelAnime.curFrame - this->skelAnime.playSpeed;
+    if (prevFrame < 15.0f && this->skelAnime.curFrame >= 15.0f) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_IRONNACK_SWING_AXE);
-    } else if (this->skelAnime.curFrame == 21.0f) {
+    } else if (prevFrame < 21.0f && this->skelAnime.curFrame >= 21.0f) {
         sp2C.x = this->actor.world.pos.x + Math_SinS(this->actor.shape.rot.y + 0x6A4) * 70.0f;
         sp2C.z = this->actor.world.pos.z + Math_CosS(this->actor.shape.rot.y + 0x6A4) * 70.0f;
         sp2C.y = this->actor.world.pos.y;
@@ -443,12 +501,24 @@ void func_80A74EBC(EnIk* this, PlayState* play) {
         Camera_AddQuake(&play->mainCamera, 2, 0x19, 5);
         func_800AA000(this->actor.xzDistToPlayer, 0xFF, 0x14, 0x96);
         CollisionCheck_SpawnShieldParticles(play, &sp2C);
+        //ipi: Cause a shockwave
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->shockwaveActive = 3;
+            static Vec3f sZero = { 0.0f, 0.0f, 0.0f };
+            sp2C.y += 10.0f;
+            EffectSsBlast_SpawnWhiteShockwave(play, &sp2C, &sZero, &sZero);
+        }
     }
 
     if ((this->skelAnime.curFrame > 17.0f) && (this->skelAnime.curFrame < 23.0f)) {
         this->unk_2FE = 1;
     } else {
-        if ((this->unk_2FB != 0) && (this->skelAnime.curFrame < 10.0f)) {
+        //ipi: Continue turning towards the player regardless of armoured state
+        if (CVarGetInteger("gIpiCrazyMode", 0) && this->skelAnime.curFrame < 15.0f) {
+            s16 turnSpeed = this->unk_2FB != 0 ? 0xC000 : 0x600;
+            Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 0x5DC, 0);
+            this->actor.shape.rot.y = this->actor.world.rot.y;
+        } else if ((this->unk_2FB != 0) && (this->skelAnime.curFrame < 10.0f)) {
             Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 0x5DC, 0);
             this->actor.shape.rot.y = this->actor.world.rot.y;
         }
@@ -714,7 +784,9 @@ void func_80A75C38(EnIk* this, PlayState* play) {
     prevHealth = this->actor.colChkInfo.health;
     Actor_ApplyDamage(&this->actor);
     if (this->actor.params != 0) {
-        if ((prevHealth > 10) && (this->actor.colChkInfo.health <= 10)) {
+        //ipi: Shed outer armour at higher health value
+        u8 armourBreakHealth = CVarGetInteger("gIpiCrazyMode", 0) ? 20 : 10;
+        if ((prevHealth > armourBreakHealth) && (this->actor.colChkInfo.health <= armourBreakHealth)) {
             this->unk_2FB = 1;
             BodyBreak_Alloc(&this->bodyBreak, 3, play);
         }
@@ -799,6 +871,27 @@ void func_80A75FA0(Actor* thisx, PlayState* play) {
     }
     if (this->unk_2F8 == 9) {
         CollisionCheck_SetAC(play, &play->colChkCtx, &this->shieldCollider.base);
+    }
+    //ipi: Update shockwave collider
+    if (this->shockwaveActive) {
+        //Knock players back
+        if (this->shockwaveCollider.base.ocFlags2 & OC2_HIT_PLAYER) {
+            this->shockwaveCollider.base.ocFlags2 &= ~OC2_HIT_PLAYER;
+            if (player->invincibilityTimer == 0) {
+                play->damagePlayer(play, -0x08);
+            }
+            func_8002F71C(play, &this->actor, 10.0f, this->actor.yawTowardsPlayer, 4.0f);
+        }
+        //Update position and size
+        Vec3s shockwavePosition;
+        shockwavePosition.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y + 0x6A4) * 70);
+        shockwavePosition.y = this->actor.world.pos.y;
+        shockwavePosition.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y + 0x6A4) * 70);
+        Collider_SetCylinderPosition(&this->shockwaveCollider, &shockwavePosition);
+        this->shockwaveCollider.dim.radius = 50 + ((3 - this->shockwaveActive) * 20);
+        CollisionCheck_SetOC(play, &play->colChkCtx, &this->shockwaveCollider.base);
+        //Count down
+        this->shockwaveActive--;
     }
 }
 
@@ -1487,6 +1580,9 @@ void EnIk_Init(Actor* thisx, PlayState* play) {
     if ((CVarGetInteger("gRandomizedEnemies", 0) || CVarGetInteger("gCrowdControl", 0)) && (thisx->params == 2 || thisx->params == 3)) {
         this->skelAnime.playSpeed = 1.0f;
     }
+
+    //ipi: Use previously unused fields for extra state
+    this->unk_4D8[0] = 0;
 }
 
 const ActorInit En_Ik_InitVars = {
