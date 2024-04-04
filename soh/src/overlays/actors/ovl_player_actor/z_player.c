@@ -11945,8 +11945,13 @@ void Player_Draw(Actor* thisx, PlayState* play2) {
 
         if (this->invincibilityTimer > 0) {
             this->unk_88F += CLAMP(50 - this->invincibilityTimer, 8, 40);
-            POLY_OPA_DISP =
-                Gfx_SetFog2(POLY_OPA_DISP, 255, 0, 0, 0, 0, 4000 - (s32)(Math_CosS(this->unk_88F * 256) * 2000.0f));
+            //ipi: Use blue effect when stunned, similar to stunning other enemies
+            if (this->frozenByStun) {
+                POLY_OPA_DISP = Gfx_SetFog2(POLY_OPA_DISP, 0, 0, 255, 0, 0, 2000.0f);
+            } else {
+                POLY_OPA_DISP =
+                    Gfx_SetFog2(POLY_OPA_DISP, 255, 0, 0, 0, 0, 4000 - (s32)(Math_CosS(this->unk_88F * 256) * 2000.0f));
+            }
         }
 
         func_8002EBCC(&this->actor, play, 0);
@@ -14425,7 +14430,7 @@ void Player_Action_8084FB10(Player* this, PlayState* play) {
 //ipi: Additional action to remain stunned
 void Player_Action_Stunned(Player* this, PlayState* play) {
     if (this->av1.actionVar1 >= 0) {
-        if (this->av1.actionVar1 < 8) {
+        if (this->av1.actionVar1 < 20) {
             this->av1.actionVar1++;
             this->stateFlags2 |= PLAYER_STATE2_FROZEN;
         } else {

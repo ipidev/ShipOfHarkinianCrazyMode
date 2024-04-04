@@ -74,10 +74,16 @@ void EnMFire1_Update(Actor* thisx, PlayState* play) {
         CollisionCheck_SetAT(play, &play->colChkCtx, &this->collider.base);
 
         //ipi: Make it harder to cheese enemies with deku nuts
-        if (CVarGetInteger("gIpiCrazyMode", 0) && this->timer < 0.4f) {
-            this->collider.info.toucher.dmgFlags = 0xFFCFFFFF;
-            this->collider.info.toucher.effect = 0x05;
-            this->collider.base.atFlags |= AT_TYPE_ENEMY;
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            if (this->timer == 0.2f && (play->gameplayFrames % 4) == 0) {
+                this->collider.info.toucher.dmgFlags = 0xFFCFFFFF;
+                this->collider.info.toucher.effect = 0x05;
+                this->collider.base.atFlags |= AT_TYPE_ENEMY;
+            } else {
+                this->collider.info.toucher.dmgFlags = 0;
+                this->collider.info.toucher.effect = 0;
+                this->collider.base.atFlags &= ~AT_TYPE_ENEMY;
+            }
         }
     }
 }
