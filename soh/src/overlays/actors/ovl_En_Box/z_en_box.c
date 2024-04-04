@@ -180,6 +180,12 @@ void EnBox_Init(Actor* thisx, PlayState* play2) {
     } else {
         if (this->type == ENBOX_TYPE_4 || this->type == ENBOX_TYPE_6) {
             this->dyna.actor.flags |= ACTOR_FLAG_LENS;
+            //ipi: Flip all the invisible chests 180 degrees for an epic troll
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                this->dyna.actor.world.pos.x -= Math_SinS(this->dyna.actor.world.rot.y) * 50.0f;
+                this->dyna.actor.world.pos.z -= Math_CosS(this->dyna.actor.world.rot.y) * 50.0f;
+                this->dyna.actor.shape.rot.y += 0x8000;
+            }
         }
         EnBox_SetupAction(this, EnBox_WaitOpen);
         this->movementFlags |= ENBOX_MOVE_IMMOBILE;
