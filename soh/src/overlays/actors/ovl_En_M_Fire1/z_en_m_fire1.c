@@ -80,7 +80,7 @@ void EnMFire1_Update(Actor* thisx, PlayState* play) {
                 this->collider.info.toucher.effect = 0x05;
                 this->collider.base.atFlags |= AT_TYPE_ENEMY;
             } else {
-                this->collider.info.toucher.dmgFlags = 0;
+                this->collider.info.toucher.dmgFlags = 1;
                 this->collider.info.toucher.effect = 0;
                 this->collider.base.atFlags &= ~AT_TYPE_ENEMY;
             }
