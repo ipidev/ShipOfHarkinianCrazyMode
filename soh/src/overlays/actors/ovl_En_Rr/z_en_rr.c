@@ -298,18 +298,21 @@ void EnRr_SetupReleasePlayer(EnRr* this, PlayState* play) {
     this->wobbleSizeTarget = 2048.0f;
     tunic = 0;
     shield = 0;
-    if (CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD) != EQUIP_VALUE_SHIELD_MIRROR) {
-        shield = Inventory_DeleteEquipment(play, EQUIP_TYPE_SHIELD);
-        if (shield != 0) {
-            this->eatenShield = shield;
-            this->retreat = true;
+    //ipi: Don't eat equipment
+    if (!CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (CUR_EQUIP_VALUE(EQUIP_TYPE_SHIELD) != EQUIP_VALUE_SHIELD_MIRROR) {
+            shield = Inventory_DeleteEquipment(play, EQUIP_TYPE_SHIELD);
+            if (shield != 0) {
+                this->eatenShield = shield;
+                this->retreat = true;
+            }
         }
-    }
-    if (CUR_EQUIP_VALUE(EQUIP_TYPE_TUNIC) != EQUIP_VALUE_TUNIC_KOKIRI && !IS_RANDO /* Randomizer Save File */) {
-        tunic = Inventory_DeleteEquipment(play, EQUIP_TYPE_TUNIC);
-        if (tunic != 0) {
-            this->eatenTunic = tunic;
-            this->retreat = true;
+        if (CUR_EQUIP_VALUE(EQUIP_TYPE_TUNIC) != EQUIP_VALUE_TUNIC_KOKIRI && !IS_RANDO /* Randomizer Save File */) {
+            tunic = Inventory_DeleteEquipment(play, EQUIP_TYPE_TUNIC);
+            if (tunic != 0) {
+                this->eatenTunic = tunic;
+                this->retreat = true;
+            }
         }
     }
     player->actor.parent = NULL;
@@ -325,7 +328,12 @@ void EnRr_SetupReleasePlayer(EnRr* this, PlayState* play) {
             break;
     }
     osSyncPrintf(VT_FGCOL(YELLOW) "%s[%d] : Rr_Catch_Cancel" VT_RST "\n", __FILE__, __LINE__);
-    func_8002F6D4(play, &this->actor, 4.0f, this->actor.shape.rot.y, 12.0f, 8);
+    //ipi: Launch the player really far, and restore gravity
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        func_8002F6D4(play, &this->actor, 15.0f, this->actor.shape.rot.y, 18.0f, 8);
+    } else {
+        func_8002F6D4(play, &this->actor, 4.0f, this->actor.shape.rot.y, 12.0f, 8);
+    }
     if (this->actor.colorFilterTimer == 0) {
         this->actionFunc = EnRr_Approach;
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_LIKE_THROW);
