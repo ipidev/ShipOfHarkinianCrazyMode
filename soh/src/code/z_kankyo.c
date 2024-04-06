@@ -1314,7 +1314,7 @@ void Environment_Update(PlayState* play, EnvironmentContext* envCtx, LightContex
             }
         } else if (play->sceneNum == SCENE_KOKIRI_FOREST && LINK_IS_CHILD) {
             //Kokiri Forest (child only)
-            isValidScene = true;
+            isValidScene = (play->roomCtx.curRoom.num == 0 && play->roomCtx.prevRoom.num == -1);
             while (npc != NULL) {
                 if (npc->id == ACTOR_EN_KO || npc->id == ACTOR_EN_MD) {
                     npcCount++;
