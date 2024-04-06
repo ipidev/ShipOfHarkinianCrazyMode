@@ -498,7 +498,51 @@ void EnWallmas_TakePlayer(EnWallmas* this, PlayState* play) {
 
     if (this->timer == 0x1E) {
         func_80078884(NA_SE_OC_ABYSS);
-        Play_TriggerRespawn(play);
+        //ipi: Very evil - warp somewhere completely different!
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            static u16 sWarpLocations[] = {
+                0x0000, //Deku Tree
+                0x0004, //Dodongo's Cavern
+                0x0008, //Gerudo Training Ground
+                0x0010, //Water Temple
+                0x0028, //Jabu Jabu
+                0x0037, //Shadow Temple
+                0x0043, //Lakeside Laboratory
+                0x007E, //Hyrule Castle Pot Room
+                0x0082, //Spirit Temple
+                0x0088, //Ice Cavern
+                0x0098, //Bottom of the Well
+                0x00BB, //Link's House
+                0x00CD, //Hyrule Field (after Zelda escape)
+                0x00DB, //Kakariko Village
+                0x00EA, //Zora's River
+                0x0108, //Zora's Domain
+                0x0117, //Gerudo Valley
+                0x011E, //Lost Woods
+                0x01F1, //Desert Colossus (Requiem)
+                0x0130, //Haunted Wasteland
+                0x013D, //Death Mountain Trail
+                0x014D, //Goron City
+                0x0157, //Lon Lon Ranch
+                0x0165, //Fire Temple
+                0x0169, //Forest Temple
+                0x0225, //Zora's Fountain
+                0x0453, //Windmill
+                0x04F6, //Death Mountain Crater (Bolero)
+                0x0568, //Graveyard (Nocturne)
+                0x05F4, //Temple of Time (Prelude)
+                0x0600, //Sacred Forest Meadow (Minuet)
+                0x0604, //Lake Hylia (Serenade)
+                0x0467, //Inside Ganon's Castle (last to ensure minimal chance)
+            };
+            static s16 sNumWarpLocations = sizeof(sWarpLocations) / sizeof(u16);
+            s16 warpIndex = Rand_ZeroOne() * ((f32)sNumWarpLocations - 0.5f);
+            play->nextEntranceIndex = sWarpLocations[warpIndex];
+            play->sceneLoadFlag = 0x14;
+            func_800994A0(play);
+        } else {
+            Play_TriggerRespawn(play);
+        }
     }
 }
 
