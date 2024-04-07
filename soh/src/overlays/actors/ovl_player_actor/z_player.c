@@ -5782,8 +5782,16 @@ void func_8083BC04(Player* this, PlayState* play) {
 
 s32 func_8083BC7C(Player* this, PlayState* play) {
     if ((this->unk_84B[this->unk_846] == 0) && (sFloorType != 7)) {
-        func_8083BC04(this, play);
-        return 1;
+        //ipi: Jump when rolling with the Bunny Hood
+        if (CVarGetInteger("gIpiCrazyMode", 0) && Player_GetMask(play) == PLAYER_MASK_BUNNY) {
+            func_8083A4A8(this, play);
+            this->actor.velocity.y = 15.0f;
+            Player_PlaySfx(this, NA_SE_IT_BOW_FLICK);
+            return 1;
+        } else {
+            func_8083BC04(this, play);
+            return 1;
+        }
     }
 
     return 0;
@@ -6571,7 +6579,10 @@ void func_8083DFE0(Player* this, f32* arg1, s16* arg2) {
             }
         }
 
-        if (CVarGetInteger("gMMBunnyHood", BUNNY_HOOD_VANILLA) == BUNNY_HOOD_FAST_AND_JUMP && this->currentMask == PLAYER_MASK_BUNNY) {
+        //ipi: Player has a higher top speed while airborne
+        if (CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_BUNNY) {
+            maxSpeed *= 2.0f;
+        } else if (CVarGetInteger("gMMBunnyHood", BUNNY_HOOD_VANILLA) == BUNNY_HOOD_FAST_AND_JUMP && this->currentMask == PLAYER_MASK_BUNNY) {
             maxSpeed *= 1.5f;
         } 
         
@@ -9303,7 +9314,8 @@ void Player_Action_80844A44(Player* this, PlayState* play) {
     Math_StepToF(&this->linearVelocity, 0.0f, 0.05f);
 
     if (this->actor.bgCheckFlags & 1) {
-        this->actor.colChkInfo.damage = 0x10;
+        //ipi: Should really take more damage for breaking your neck like this...
+        this->actor.colChkInfo.damage = CVarGetInteger("gIpiCrazyMode", 0) ? 0xF0 : 0x10;
         func_80837C0C(play, this, 1, 4.0f, 5.0f, this->actor.shape.rot.y, 20);
     }
 }
