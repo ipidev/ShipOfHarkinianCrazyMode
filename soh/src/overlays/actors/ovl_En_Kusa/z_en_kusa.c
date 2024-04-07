@@ -126,28 +126,92 @@ s32 EnKusa_SnapToFloor(EnKusa* this, PlayState* play, f32 yOffset) {
 void EnKusa_DropCollectible(EnKusa* this, PlayState* play) {
     s16 dropParams;
 
-    switch (this->actor.params & 3) {
-        case ENKUSA_TYPE_0:
-        case ENKUSA_TYPE_2:
-            dropParams = (this->actor.params >> 8) & 0xF;
+    //ipi: Spawn much better items if wearing the Keaton mask
+    if (CVarGetInteger("gIpiCrazyMode", 0) && Player_GetMask(play) == PLAYER_MASK_KEATON) {
+        static s16 sNextDropType = 0;
+        //Loop until we've found something valid to be spawned
+        dropParams = -1;
+        while (dropParams == -1) {
+            switch (sNextDropType++) {
+                case 0:
+                    if (AMMO(ITEM_BOMB) < CUR_CAPACITY(UPG_BOMB_BAG)) {
+                        dropParams = ITEM00_BOMBS_A;
+                    }
+                    break;
+                case 1:
+                    if (IS_RANDO && Randomizer_GetSettingValue(RSK_ENABLE_BOMBCHU_DROPS) == 1) {
+                        if (INV_CONTENT(ITEM_BOMBCHU) != ITEM_NONE && AMMO(ITEM_BOMBCHU) < 50) {
+                            dropParams = ITEM00_BOMBCHU;
+                        }
+                    }
+                    break;
+                case 2:
+                    if (LINK_IS_ADULT) {
+                        if (AMMO(ITEM_BOW) < CUR_CAPACITY(UPG_QUIVER)) {
+                            dropParams = ITEM00_ARROWS_SMALL;
+                        }
+                    } else {
+                        if (AMMO(ITEM_SLINGSHOT) < CUR_CAPACITY(UPG_BULLET_BAG)) {
+                            dropParams = ITEM00_SEEDS;
+                        }
+                    }
+                    break;
+                case 3:
+                    if (AMMO(ITEM_NUT) < CUR_CAPACITY(UPG_NUTS)) {
+                        dropParams = ITEM00_NUTS;
+                    }
+                    break;
+                case 4:
+                    if (LINK_IS_CHILD && AMMO(ITEM_STICK) < CUR_CAPACITY(UPG_STICKS)) {
+                        dropParams = ITEM00_STICK;
+                    }
+                    break;
+                case 5:
+                    if (gSaveContext.health < gSaveContext.healthCapacity) {
+                        dropParams = ITEM00_HEART;
+                    }
+                    break;
+                case 6:
+                    if (gSaveContext.magic < gSaveContext.magicCapacity) {
+                        dropParams = ITEM00_MAGIC_SMALL;
+                    }
+                    break;
+                case 7:
+                    if (gSaveContext.rupees < CUR_CAPACITY(UPG_WALLET)) {
+                        dropParams = Rand_Next() & 1 ? ITEM00_RUPEE_RED : ITEM00_RUPEE_BLUE;
+                    }
+                    break;
+                case 8:
+                    dropParams = Rand_Next() & 1 ? ITEM00_RUPEE_BLUE : ITEM00_RUPEE_GREEN;
+                    sNextDropType = 0;
+                    break;
+            }
+        }
+        Item_DropCollectible(play, &this->actor.world.pos, dropParams);
+    } else {
+        switch (this->actor.params & 3) {
+            case ENKUSA_TYPE_0:
+            case ENKUSA_TYPE_2:
+                dropParams = (this->actor.params >> 8) & 0xF;
 
-            if (dropParams >= 0xD) {
-                dropParams = 0;
-            }
-            Item_DropCollectibleRandom(play, NULL, &this->actor.world.pos, dropParams << 4);
-            break;
-        case ENKUSA_TYPE_1:
-            if (CVarGetInteger("gNoRandomDrops", 0)) {
-            }
-            else if (CVarGetInteger("gNoHeartDrops", 0)) {
-                Item_DropCollectible(play, &this->actor.world.pos, ITEM00_SEEDS);
-            }
-            else if (Rand_ZeroOne() < 0.5f) {
-                Item_DropCollectible(play, &this->actor.world.pos, ITEM00_SEEDS);
-            } else {
-                Item_DropCollectible(play, &this->actor.world.pos, ITEM00_HEART);
-            }
-            break;
+                if (dropParams >= 0xD) {
+                    dropParams = 0;
+                }
+                Item_DropCollectibleRandom(play, NULL, &this->actor.world.pos, dropParams << 4);
+                break;
+            case ENKUSA_TYPE_1:
+                if (CVarGetInteger("gNoRandomDrops", 0)) {
+                }
+                else if (CVarGetInteger("gNoHeartDrops", 0)) {
+                    Item_DropCollectible(play, &this->actor.world.pos, ITEM00_SEEDS);
+                }
+                else if (Rand_ZeroOne() < 0.5f) {
+                    Item_DropCollectible(play, &this->actor.world.pos, ITEM00_SEEDS);
+                } else {
+                    Item_DropCollectible(play, &this->actor.world.pos, ITEM00_HEART);
+                }
+                break;
+        }
     }
 }
 
