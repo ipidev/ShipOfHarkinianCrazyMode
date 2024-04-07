@@ -119,6 +119,24 @@ void EnCrow_Init(Actor* thisx, PlayState* play) {
     ActorShape_Init(&this->actor.shape, 2000.0f, ActorShadow_DrawCircle, 20.0f);
     sDeathCount = 0;
     EnCrow_SetupFlyIdle(this);
+
+    //ipi: Spawn a horde of Guays instead
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (this->actor.params == 0) {
+            for (s16 i = 0; i < 3; i++) {
+                s16 angle = this->actor.world.rot.y + (0x5555 * i);
+                Vec3f spawnPos;
+                spawnPos.x = this->actor.world.pos.x + (Math_SinS(angle) * 10.0f);
+                spawnPos.y = this->actor.world.pos.y;
+                spawnPos.z = this->actor.world.pos.z + (Math_CosS(angle) * 10.0f);
+                Actor_SpawnAsChild(&play->actorCtx, &this->actor, play, ACTOR_EN_CROW,
+                    spawnPos.x, spawnPos.y, spawnPos.z, 0, angle, 0, -1);
+            }
+        } else if (this->actor.params == -1) {
+            //We were spawned by another Guay, reset
+            this->actor.params = 0;
+        }
+    }
 }
 
 void EnCrow_Destroy(Actor* thisx, PlayState* play) {
@@ -132,7 +150,8 @@ void EnCrow_Destroy(Actor* thisx, PlayState* play) {
 // Setup Action functions
 
 void EnCrow_SetupFlyIdle(EnCrow* this) {
-    this->timer = 100;
+    //ipi: Faster!
+    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 40 : 100;
     this->collider.base.acFlags |= AC_ON;
     this->actionFunc = EnCrow_FlyIdle;
     this->skelAnime.playSpeed = 1.0f;
@@ -207,7 +226,8 @@ void EnCrow_SetupTurnAway(EnCrow* this) {
 }
 
 void EnCrow_SetupRespawn(EnCrow* this) {
-    if (sDeathCount == 10) {
+    //ipi: Always respawn as the big Guay
+    if (sDeathCount == 10 || (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params == 0)) {
         this->actor.params = 1;
         sDeathCount = 0;
         this->collider.elements[0].dim.worldSphere.radius =
