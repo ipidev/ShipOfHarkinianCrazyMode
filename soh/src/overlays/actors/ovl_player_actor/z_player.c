@@ -364,6 +364,9 @@ void Player_Action_CsAction(Player* this, PlayState* play);
 //ipi: Additional action to remain stunned
 void Player_Action_Stunned(Player* this, PlayState* play);
 
+//ipi: Allow the player to be randomly ambushed by enemies
+void Player_TrySpawnEnemyAmbush(Player* this, PlayState* play);
+
 // .bss part 1
 static s32 D_80858AA0;
 static s32 D_80858AA4;
@@ -11636,6 +11639,11 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
         }
 
         AnimationContext_SetNextQueue(play);
+
+        //ipi: Allow the player to be randomly ambushed by enemies
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            Player_TrySpawnEnemyAmbush(this, play);
+        }
     }
 
     Math_Vec3f_Copy(&this->actor.home.pos, &this->actor.world.pos);
@@ -16138,3 +16146,79 @@ void Player_StartTalking(PlayState* play, Actor* actor) {
         func_80835EA4(play, 0xB);
     }
 }
+
+//ipi: Allow the player to be randomly ambushed by enemies
+void Player_TrySpawnEnemyAmbush(Player* this, PlayState* play) {
+    if (this->timeUntilEnemyAmbush > 0) {
+        //Spawn twice as fast at night
+        s16 decrementAmount = IS_NIGHT ? 2 : 1;
+        this->timeUntilEnemyAmbush = CLAMP_MIN(this->timeUntilEnemyAmbush - decrementAmount, 0);
+        if (this->timeUntilEnemyAmbush == 0) {
+            //The player must be on the ground in a valid state to spawn enemies
+            if ((this->actor.bgCheckFlags & 1) == 0 || (this->stateFlags1 & PLAYER_STATE1_DEAD) ||
+                (this->stateFlags1 & PLAYER_STATE1_ON_HORSE) || (this->stateFlags1 & PLAYER_STATE1_IN_WATER) ||
+                (this->stateFlags1 & PLAYER_STATE1_IN_CUTSCENE) || (this->stateFlags2 & PLAYER_STATE2_CRAWLING)) {
+                this->timeUntilEnemyAmbush = 40;
+                return;
+            }
+            //If the player is wearing the Skull Mask, never ambush them
+            if (Player_GetMask(play) == PLAYER_MASK_SKULL) {
+                this->timeUntilEnemyAmbush = 200;
+                return;
+            }
+            //Get the enemy ambush table. If not found, reset timer (we may not be in a valid room)
+            CrazyModeEnemyAmbush* ambushTable;
+            s32 ambushTableLength;
+            if (!Player_GetEnemyAmbushTable(play, &ambushTable, &ambushTableLength)) {
+                this->timeUntilEnemyAmbush = 200;
+                return;
+            }
+            //Select a random value from the table. The last index has less chance than the others
+            s32 randomIndex = (s32)Rand_ZeroFloat((f32)ambushTableLength - 0.5f);
+            CrazyModeEnemyAmbush* chosenAmbush = &ambushTable[randomIndex];
+            //Find a valid spawn location in front of the player
+            s16 randomAngle = this->actor.world.rot.y + Rand_CenteredFloat(0x8000);
+            Vec3f checkStartPos, checkEndPos;
+            checkStartPos.x = this->actor.world.pos.x + (Math_SinS(randomAngle) * chosenAmbush->xzOffset);
+            checkStartPos.y = this->actor.world.pos.y + 20.0f; //About to use this for a raycast
+            checkStartPos.z = this->actor.world.pos.z + (Math_CosS(randomAngle) * chosenAmbush->xzOffset);
+            Math_Vec3f_Copy(&checkEndPos, &checkStartPos);
+            checkEndPos.y -= 40.0f;
+            //Raycast to make sure there's valid floor
+            Vec3f spawnPos;
+            CollisionPoly* poly;
+            s32 bgId;
+            if (!BgCheck_EntityLineTest1(&play->colCtx, &checkStartPos, &checkEndPos,
+                &spawnPos, &poly, false, true, false, true, &bgId)) {
+                //No floor, wait before trying again
+                this->timeUntilEnemyAmbush = 20;
+                return;
+            }
+            //Add vertical offset and spawn enemy
+            spawnPos.y += chosenAmbush->yOffset;
+            Actor_Spawn(&play->actorCtx, play, chosenAmbush->actorID, spawnPos.x, spawnPos.y, spawnPos.z,
+                0, randomAngle + 0x8000, 0, chosenAmbush->actorParams, true);
+            //Spawn effect if needed
+            if (chosenAmbush->spawnEffect) {
+                spawnPos.y += 30.0f;
+                static Vec3f sZero = { 0.0f, 0.0f, 0.0f };
+                static Color_RGBA8 sPrimColor = { 250, 250, 250, 255 };
+                static Color_RGBA8 sEnvColor = { 180, 180, 180, 255 };
+                for (s16 i = 0; i < 8; i++) {
+                    s16 randomYaw = (s16)Rand_Next();
+                    s16 randomPitch = (s16)Rand_Next();
+                    f32 randomSpeed = Rand_ZeroFloat(4.0f) + 4.0f;
+                    Vec3f velocity;
+                    velocity.x = Math_SinS(randomYaw) * randomSpeed;
+                    velocity.y = Math_SinS(randomPitch) * randomSpeed;
+                    velocity.z = Math_CosS(randomYaw) * randomSpeed;
+                    func_8002829C(play, &spawnPos, &velocity, &sZero, &sPrimColor, &sEnvColor, 500, 50);
+                }
+                SoundSource_PlaySfxAtFixedWorldPos(play, &spawnPos, 20, NA_SE_EV_STONE_GROW_UP);
+            }
+            //Reset timer
+            this->timeUntilEnemyAmbush = (s16)Rand_ZeroFloat(200.0f) + 200;
+        }
+    }
+}
+

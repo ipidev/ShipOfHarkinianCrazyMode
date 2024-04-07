@@ -407,6 +407,15 @@ typedef struct {
     /* 0x00 */ s32 flagID;     // which flag to set when Player_SetPendingFlag is called
     /* 0x04 */ FlagType flagType;  // type of flag to set when Player_SetPendingFlag is called
 } PendingFlag; // size = 0x06
+
+//ipi: Extra struct to store enemy ambush possibilities
+typedef struct {
+    /* 0x00 */ s16 actorID;     // ID of the actor to spawn
+    /* 0x02 */ s16 actorParams; // Params of the spawned actor
+    /* 0x04 */ f32 xzOffset;    // Horizontal spawn offset
+    /* 0x08 */ f32 yOffset;     // Vertical spawn offset
+    /* 0x0C */ u8 spawnEffect;  // Whether an effect should be spawned
+} CrazyModeEnemyAmbush;
 // #endregion
 
 #define PLAYER_STATE1_LOADING (1 << 0) //Transitioning to a new scene
@@ -683,6 +692,8 @@ typedef struct Player {
     u8 ivanDamageMultiplier;
     //ipi: Extra flag to not create ice crystal while frozen
     u8 frozenByStun;
+    //ipi: Extra value to count down to random enemy spawn
+    s16 timeUntilEnemyAmbush;
 } Player; // size = 0xA94
 
 #endif

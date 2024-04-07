@@ -780,6 +780,17 @@ void Play_Init(GameState* thisx) {
             cucco->room = -1;
         }
     }
+
+    //ipi: Set up enemy ambush timer if we're in a valid scene for it
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        CrazyModeEnemyAmbush* ambushTable;
+        s32 ambushTableLength;
+        if (Player_GetEnemyAmbushTable(play, &ambushTable, &ambushTableLength)) {
+            player->timeUntilEnemyAmbush = (s16)Rand_ZeroFloat(300.0f) + 300;
+        } else {
+            player->timeUntilEnemyAmbush = -1;
+        }
+    }
 }
 
 void Play_Update(PlayState* play) {

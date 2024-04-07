@@ -6398,3 +6398,94 @@ s16 Actor_CrazyModeCheckCivilianDamageInternal(PlayState* play, Actor* actor, Co
 s16 Actor_CrazyModeCheckCivilianDamage(PlayState* play, Actor* actor, ColliderCylinder* cylinderCollider) {
     return Actor_CrazyModeCheckCivilianDamageInternal(play, actor, &cylinderCollider->base, cylinderCollider->dim.height);
 }
+
+//ipi: Allow the player to be randomly ambushed by enemies
+s16 Player_GetEnemyAmbushTable(PlayState* play, CrazyModeEnemyAmbush** outTable, s32* outLength) {
+    static CrazyModeEnemyAmbush sForestTable[] = {
+        { ACTOR_EN_DEKUBABA, 0, 150.0f, 0.0f, true },
+        { ACTOR_EN_DEKUBABA, 1, 250.0f, 0.0f, true },
+        { ACTOR_EN_KAREBABA, 0, 100.0f, 0.0f, true },
+        { ACTOR_EN_DEKUNUTS, 0, 200.0f, 0.0f, true },
+        { ACTOR_EN_GOMA, 7, 200.0f, 0.0f, true },
+        { ACTOR_EN_WF, 0, 100.0f, 0.0f, false },
+    };
+    static CrazyModeEnemyAmbush sMountainTable[] = {
+        { ACTOR_EN_TITE, -1, 200.0f, 0.0f, true },
+        { ACTOR_EN_TITE, -1, 200.0f, 0.0f, true },
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },
+        { ACTOR_EN_DODOJR, 0, 100.0f, 0.0f, false },
+        { ACTOR_EN_DODONGO, -1, 300.0f, 0.0f, true },
+    };
+    static CrazyModeEnemyAmbush sLakeTable[] = {
+        { ACTOR_EN_TITE, -2, 200.0f, 0.0f, true },
+        { ACTOR_EN_CROW, 0, 200.0f, 200.0f, true },
+        { ACTOR_EN_SB, 0, 200.0f, 0.0f, true },
+        { ACTOR_EN_NY, 0, 200.0f, 0.0f, true },
+        { ACTOR_EN_FZ, 0, 250.0f, 0.0f, true },
+        { ACTOR_EN_BILI, 0, 200.0f, 100.0f, true },
+    };
+    static CrazyModeEnemyAmbush sGraveyardTable[] = {
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },
+        { ACTOR_EN_FIREFLY, 3, 200.0f, 0.0f, true },
+        { ACTOR_EN_FIREFLY, 3, 200.0f, 0.0f, true },
+        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },
+        { ACTOR_EN_RD, 32766, 350.0f, 0.0f, true },
+        { ACTOR_EN_RR, 0, 250.0f, 0.0f, true },
+        { ACTOR_EN_WALLMAS, 1, 0.0f, 0.0f, false },
+    };
+    static CrazyModeEnemyAmbush sDesertTable[] = {
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },
+        { ACTOR_EN_FIREFLY, 3, 200.0f, 0.0f, true },
+        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },
+        { ACTOR_EN_RD, 32766, 350.0f, 0.0f, true },
+        { ACTOR_EN_IK, 2, 300.0f, 0.0f, false },
+    };
+    static CrazyModeEnemyAmbush sFieldTable[] = {
+        { ACTOR_EN_SKB, -1, 100.0f, 0.0f, false },
+        { ACTOR_EN_SKB, -20, 150.0f, 0.0f, false },
+        { ACTOR_EN_TEST, 2, 200.0f, 0.0f, false },
+        { ACTOR_EN_TITE, -1, 300.0f, 0.0f, true },
+        { ACTOR_EN_CROW, 0, 200.0f, 200.0f, true },
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 200.0f, true },
+        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },
+        { ACTOR_EN_PEEHAT, 1, 200.0f, 50.0f, true },
+        { ACTOR_EN_PEEHAT, -1, 400.0f, 0.0f, true },
+    };
+    //Macro to easily return a table and its length
+#define RETURN_ENEMY_AMBUSH_TABLE(table) *outTable = &table; *outLength = sizeof(table) / sizeof(CrazyModeEnemyAmbush); return true;
+    //Decide which table should be used
+    switch (play->sceneNum) {
+        case SCENE_KOKIRI_FOREST:
+        case SCENE_LOST_WOODS:
+        case SCENE_SACRED_FOREST_MEADOW:
+            RETURN_ENEMY_AMBUSH_TABLE(sForestTable);
+        case SCENE_GORON_CITY:
+            if (play->roomCtx.curRoom.num == 0) return false;
+            //Fallthrough
+        case SCENE_DEATH_MOUNTAIN_TRAIL:
+        case SCENE_DEATH_MOUNTAIN_CRATER:
+            RETURN_ENEMY_AMBUSH_TABLE(sMountainTable);
+        case SCENE_LAKE_HYLIA:
+        case SCENE_ZORAS_RIVER:
+        case SCENE_ZORAS_DOMAIN:
+        case SCENE_ZORAS_FOUNTAIN:
+            RETURN_ENEMY_AMBUSH_TABLE(sLakeTable);
+        case SCENE_KAKARIKO_VILLAGE:
+        case SCENE_GRAVEYARD:
+            RETURN_ENEMY_AMBUSH_TABLE(sGraveyardTable);
+        case SCENE_GERUDO_VALLEY:
+        case SCENE_GERUDOS_FORTRESS:
+        case SCENE_HAUNTED_WASTELAND:
+        case SCENE_DESERT_COLOSSUS:
+        case SCENE_OUTSIDE_GANONS_CASTLE:
+            RETURN_ENEMY_AMBUSH_TABLE(sDesertTable);
+        case SCENE_HYRULE_FIELD:
+        case SCENE_HYRULE_CASTLE:
+        case SCENE_LON_LON_RANCH:
+            RETURN_ENEMY_AMBUSH_TABLE(sFieldTable);
+        default:
+            return false;
+    };
+#undef RETURN_ENEMY_AMBUSH_TABLE
+}
