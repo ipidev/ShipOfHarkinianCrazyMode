@@ -9,6 +9,9 @@
 #include "objects/gameplay_keep/gameplay_keep.h"
 #include "vt.h"
 
+//ipi: For COLPOLY_GET_NORMAL()
+#include "z64bgcheck.h"
+
 #define FLAGS ACTOR_FLAG_IGNORE_POINTLIGHTS
 
 void ObjBean_Init(Actor* thisx, PlayState* play);
@@ -61,6 +64,14 @@ void ObjBean_SetupGrow(ObjBean* this);
 void ObjBean_SetupWaitForStepOff(ObjBean* this);
 void ObjBean_WaitForStepOff(ObjBean* this, PlayState* play);
 
+//ipi: Player can control magic bean plant
+void ObjBean_SetupWaitToTalk(ObjBean* this, PlayState* play);
+void ObjBean_WaitToTalk(ObjBean* this, PlayState* play);
+void ObjBean_SetupTalking(ObjBean* this, PlayState* play);
+void ObjBean_Talking(ObjBean* this, PlayState* play);
+void ObjBean_SetupCrazyModeFly(ObjBean* this, PlayState* play);
+void ObjBean_CrazyModeFly(ObjBean* this, PlayState* play);
+
 #define BEAN_STATE_DRAW_LEAVES (1 << 0)
 #define BEAN_STATE_DRAW_SOIL (1 << 1)
 #define BEAN_STATE_DRAW_PLANT (1 << 2)
@@ -71,6 +82,9 @@ void ObjBean_WaitForStepOff(ObjBean* this, PlayState* play);
 #define BEAN_STATE_PLAYER_ON_TOP (1 << 7)
 
 static ObjBean* D_80B90E30 = NULL;
+
+//ipi: Speak to the player once per session
+static s32 sCrazyModeSpoken = false;
 
 const ActorInit Obj_Bean_InitVars = {
     ACTOR_OBJ_BEAN,
@@ -470,7 +484,8 @@ void ObjBean_Init(Actor* thisx, PlayState* play) {
     ObjBean* this = (ObjBean*)thisx;
 
     Actor_ProcessInitChain(&this->dyna.actor, sInitChain);
-    if (LINK_AGE_IN_YEARS == YEARS_ADULT) {
+    //ipi: Allow grown plants to spawn as child
+    if (LINK_AGE_IN_YEARS == YEARS_ADULT || CVarGetInteger("gIpiCrazyMode", 0)) {
         if (Flags_GetSwitch(play, this->dyna.actor.params & 0x3F) || (mREG(1) == 1)) {
             path = (this->dyna.actor.params >> 8) & 0x1F;
             if (path == 0x1F) {
@@ -494,7 +509,17 @@ void ObjBean_Init(Actor* thisx, PlayState* play) {
             ObjBean_SetupPathCount(this, play);
             ObjBean_SetupPath(this, play);
             ObjBean_Move(this);
-            ObjBean_SetupWaitForPlayer(this);
+            //ipi: Diverge here
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                //Speak to the player if they don't yet know the controls
+                if (sCrazyModeSpoken) {
+                    ObjBean_SetupCrazyModeFly(this, play);
+                } else {
+                    ObjBean_SetupWaitToTalk(this, play);
+                }
+            } else {
+                ObjBean_SetupWaitForPlayer(this);
+            }
 
             ObjBean_InitDynaPoly(this, play, &gMagicBeanPlatformCol, DPM_UNK3);
             this->stateFlags |= BEAN_STATE_DYNAPOLY_SET;
@@ -504,6 +529,9 @@ void ObjBean_Init(Actor* thisx, PlayState* play) {
             ActorShape_Init(&this->dyna.actor.shape, 0.0f, ActorShadow_DrawCircle, 8.8f);
             ObjBean_FindFloor(this, play);
             this->unk_1F6 = this->dyna.actor.home.rot.z & 3;
+        } else if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            //ipi: Allow bean spot to spawn as adult (or child)
+            ObjBean_SetupWaitForBean(this);
         } else {
             Actor_Kill(&this->dyna.actor);
             return;
@@ -564,7 +592,12 @@ void func_80B8FE3C(ObjBean* this, PlayState* play) {
 
 void func_80B8FE6C(ObjBean* this) {
     this->actionFunc = func_80B8FEAC;
-    ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_LEAVES | BEAN_STATE_DRAW_SOIL);
+    //ipi: Spawn the fully-grown plant immediately
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_PLANT | BEAN_STATE_DRAW_SOIL);
+    } else {
+        ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_LEAVES | BEAN_STATE_DRAW_SOIL);
+    }
     Actor_SetScale(&this->dyna.actor, 0.01f);
 }
 
@@ -588,7 +621,12 @@ void func_80B8FEAC(ObjBean* this, PlayState* play) {
 
 void func_80B8FF50(ObjBean* this) {
     this->actionFunc = func_80B8FF8C;
-    ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_LEAVES | BEAN_STATE_DRAW_SOIL);
+    //ipi: Spawn the fully-grown plant immediately
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_PLANT | BEAN_STATE_DRAW_SOIL);
+    } else {
+        ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_LEAVES | BEAN_STATE_DRAW_SOIL);
+    }
     this->unk_1B6.x = 0x33E9;
 }
 
@@ -603,7 +641,12 @@ void func_80B8FF8C(ObjBean* this, PlayState* play) {
 
 void func_80B90010(ObjBean* this) {
     this->actionFunc = func_80B90050;
-    ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_LEAVES | BEAN_STATE_DRAW_SOIL);
+    //ipi: Spawn the fully-grown plant immediately
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_PLANT | BEAN_STATE_DRAW_SOIL);
+    } else {
+        ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_LEAVES | BEAN_STATE_DRAW_SOIL);
+    }
     this->unk_1B6.x = 0;
     this->unk_1B6.y = 0xBB8;
 }
@@ -620,7 +663,22 @@ void func_80B90050(ObjBean* this, PlayState* play) {
     this->dyna.actor.scale.y = Math_SinS(temp_a0) * 0.17434467f;
     this->dyna.actor.scale.x = this->dyna.actor.scale.z = Math_CosS(temp_a0) * 0.12207746f;
     if (this->unk_1B6.y < 0) {
-        ObjBean_SetupWaitForWater(this);
+        //ipi: Finish spawning the fully-grown plant
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            //This part would have been skipped in the Init call
+            ObjBean_InitDynaPoly(this, play, &gMagicBeanPlatformCol, DPM_UNK3);
+            this->stateFlags |= BEAN_STATE_DYNAPOLY_SET;
+            ObjBean_InitCollider(&this->dyna.actor, play);
+            this->stateFlags |= BEAN_STATE_COLLIDER_SET;
+            //Speak to the player if they don't yet know the controls
+            if (sCrazyModeSpoken) {
+                ObjBean_SetupCrazyModeFly(this, play);
+            } else {
+                ObjBean_SetupWaitToTalk(this, play);
+            }
+        } else {
+            ObjBean_SetupWaitForWater(this);
+        }
     }
 }
 
@@ -867,6 +925,179 @@ void func_80B90A34(ObjBean* this, PlayState* play) {
         ObjBean_SetupWaitForPlayer(this);
     }
 }
+
+//ipi: Inform the player of how the controls work
+void ObjBean_SetupWaitToTalk(ObjBean* this, PlayState* play) {
+    this->actionFunc = ObjBean_WaitToTalk;
+    ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_PLANT);
+}
+
+void ObjBean_WaitToTalk(ObjBean* this, PlayState* play) {
+    //Wait until player steps on us before starting dialog
+    if (func_8004356C(&this->dyna) && Message_GetState(&play->msgCtx) == TEXT_STATE_NONE) {
+        Message_StartTextbox(play, 0x7008, NULL);
+        func_8002DF54(play, NULL, 8); //Stop the player until they dismiss the text box
+        ObjBean_SetupTalking(this, play);
+    }
+}
+
+void ObjBean_SetupTalking(ObjBean* this, PlayState* play) {
+    this->actionFunc = ObjBean_Talking;
+    ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_PLANT);
+}
+
+void ObjBean_Talking(ObjBean* this, PlayState* play) {
+    if (Message_GetState(&play->msgCtx) == TEXT_STATE_NONE) {
+        ObjBean_SetupCrazyModeFly(this, play);
+        func_8002DF54(play, NULL, 7); //Player can move again
+        sCrazyModeSpoken = true;
+    }
+}
+
+//ipi: Player can control magic bean plant
+void ObjBean_SetupCrazyModeFly(ObjBean* this, PlayState* play) {
+    this->actionFunc = ObjBean_CrazyModeFly;
+    ObjBean_SetDrawMode(this, BEAN_STATE_DRAW_PLANT);
+    this->dyna.actor.flags |= ACTOR_FLAG_UPDATE_WHILE_CULLED;
+}
+
+//ipi: Avoiding using ObjBean_FindFloor since that has issues when directly on the floor
+s32 ObjBean_CrazyModeFindFloor(ObjBean* this, PlayState* play, float* outFloorHeight) {
+    Vec3f checkStart, checkEnd;
+    Math_Vec3f_Copy(&checkStart, &this->dyna.actor.world.pos);
+    checkStart.y += 20.0f;
+    Math_Vec3f_Copy(&checkEnd, &this->dyna.actor.world.pos);
+    checkEnd.y -= 20.0f;
+    Vec3f floorPos;
+    CollisionPoly* poly;
+    s32 bgId;
+    if (BgCheck_EntityLineTest2(&play->colCtx, &checkStart, &checkEnd, &floorPos, &poly,
+        false, true, false, true, &bgId, &this->dyna.actor)) {
+        *outFloorHeight = floorPos.y;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+//ipi: Math_StepToF seems to be behaving weird for small values...
+void ObjBean_StepTo(float* value, float target, float step) {
+    f32 diff = target - *value;
+    if (ABS(diff) <= step) {
+        *value = target;
+    } else if (*value < target) {
+        *value += step;
+    } else {
+        *value -= step;
+    }
+}
+
+//ipi: Don't trust the implementation of Math3D_Vec3fReflect
+void ObjBean_Reflect(Vec3f* input, Vec3f* normal, Vec3f* outReflection) {
+    f32 dot = Math3D_Cos(input, normal);
+    /*outReflection->x = input->x - (2.0f * dot * normal->x);
+    outReflection->y = input->y - (2.0f * dot * normal->y);
+    outReflection->z = input->z - (2.0f * dot * normal->z);*/
+    outReflection->x = (2.0f * dot * normal->x) + input->x;
+    outReflection->y = (2.0f * dot * normal->y) + input->y;
+    outReflection->z = (2.0f * dot * normal->z) + input->z;
+}
+
+void ObjBean_CrazyModeFly(ObjBean* this, PlayState* play) {
+    //Check if we're hitting the floor or water surface (Actor_UpdateBgCheckInfo has issues with floor detection)
+    f32 floorHeight;
+    s32 foundFloor = ObjBean_CrazyModeFindFloor(this, play, &floorHeight); //1 if we found the floor
+    if (this->dyna.actor.yDistToWater >= 0.0f) {
+        foundFloor = 2; //2 to signify hitting water instead
+        floorHeight = this->dyna.actor.world.pos.y + this->dyna.actor.yDistToWater;
+    }
+    s32 isOnFloor = foundFloor && floorHeight >= this->dyna.actor.world.pos.y;
+    if (isOnFloor) {
+        //Hit the floor or add bouyancy, depending on the type of found floor
+        if (foundFloor == 1) {
+            this->dyna.actor.world.pos.y = floorHeight;
+            this->dyna.actor.velocity.y = 0.0f;
+        } else if (foundFloor == 2 && this->dyna.actor.velocity.y < 1.0f) {
+            this->dyna.actor.velocity.y += 0.3f;
+        }
+    } else if (this->dyna.actor.velocity.y > -3.0f) {
+        this->dyna.actor.velocity.y -= 0.1f;
+    }
+    //If we just hit a wall, bounce horizontally
+    /*if (this->dyna.actor.bgCheckFlags & 8) {
+        this->dyna.actor.bgCheckFlags &= ~8;
+        Vec3f wallNormal, reflectedVelocity;
+        wallNormal.x = COLPOLY_GET_NORMAL(this->dyna.actor.wallPoly->normal.x);
+        wallNormal.y = COLPOLY_GET_NORMAL(this->dyna.actor.wallPoly->normal.y);
+        wallNormal.z = COLPOLY_GET_NORMAL(this->dyna.actor.wallPoly->normal.z);
+        //Math3D_Vec3fReflect(&this->dyna.actor.velocity, &wallNormal, &reflectedVelocity);
+        ObjBean_Reflect(&this->dyna.actor.velocity, &wallNormal, &reflectedVelocity);
+        this->dyna.actor.velocity.x = reflectedVelocity.x * 0.5f;
+        this->dyna.actor.velocity.z = reflectedVelocity.z * 0.5f;
+    }*/
+    //Allow player to control flight while on shielding top
+    s32 recievingInput = false;
+    if (func_8004356C(&this->dyna)) {
+        Player* player = GET_PLAYER(play);
+        if (player->stateFlags1 & PLAYER_STATE1_SHIELDING && !(player->stateFlags1 & PLAYER_STATE1_TARGETING)) {
+            static f32 moveSpeed = 0.25f;
+            //Accelerate upwards while holding A
+            Input* input = &gPlayState->state.input[0];
+            if (CHECK_BTN_ALL(input->cur.button, BTN_A)) {
+                this->dyna.actor.velocity.y = CLAMP_MAX(this->dyna.actor.velocity.y + moveSpeed, 3.0f);
+                recievingInput = true;
+            }
+            //Determine stick input
+            f32 xInput = input->cur.stick_x / -127.0f;
+            f32 yInput = input->cur.stick_y / 127.0f;
+            f32 inputSquaredLength = SQ(xInput) + SQ(yInput);
+            if (inputSquaredLength > 1.0f) {
+                inputSquaredLength = sqrtf(inputSquaredLength);
+                xInput /= inputSquaredLength;
+                yInput /= inputSquaredLength;
+            }
+            //Move relative to the camera (adapted from z_player.c in gMoveWhileFirstPerson block)
+            s16 cameraYaw = Camera_GetCamDirYaw(GET_ACTIVE_CAM(play));
+            this->dyna.actor.velocity.x += ((Math_CosS(cameraYaw) * xInput) + (Math_SinS(cameraYaw) * yInput)) * moveSpeed;
+            this->dyna.actor.velocity.z += ((Math_CosS(cameraYaw) * yInput) - (Math_SinS(cameraYaw) * xInput)) * moveSpeed;
+            recievingInput |= (inputSquaredLength > 0.0f);
+        }
+        //Activate camera
+        Camera_ChangeSetting(play->cameraPtrs[MAIN_CAM], CAM_SET_BEAN_GENERIC);
+    } else if (this->stateFlags & BEAN_STATE_PLAYER_ON_TOP) {
+        //Player was riding but has now left, reset camera
+        Camera* camera = play->cameraPtrs[MAIN_CAM];
+        if (camera->setting == CAM_SET_BEAN_GENERIC) {
+            Camera_ChangeSetting(camera, CAM_SET_NORMAL0);
+        }
+    }
+    //Play sounds
+    if (recievingInput) {
+        func_8002F974(&this->dyna.actor, NA_SE_PL_PLANT_MOVE - SFX_FLAG);
+    }
+    //Apply friction to movement
+    f32 currSpeed = Math3D_Vec3fMagnitude(&this->dyna.actor.velocity);
+    if (currSpeed > 0.0f) {
+        f32 frictionCoeff = (foundFloor && isOnFloor) || (this->dyna.actor.bgCheckFlags & 8) ? 0.25f : 0.05f;
+        Vec3f friction;
+        friction.x = (this->dyna.actor.velocity.x / currSpeed) * frictionCoeff;
+        friction.y = (this->dyna.actor.velocity.y / currSpeed) * frictionCoeff;
+        friction.z = (this->dyna.actor.velocity.z / currSpeed) * frictionCoeff;
+        ObjBean_StepTo(&this->dyna.actor.velocity.x, 0.0f, friction.x);
+        ObjBean_StepTo(&this->dyna.actor.velocity.y, 0.0f, friction.y);
+        ObjBean_StepTo(&this->dyna.actor.velocity.z, 0.0f, friction.z);
+    }
+    //Limit speed
+    if (currSpeed > 8.0f) {
+        Math_Vec3f_Scale(&this->dyna.actor.velocity, 8.0f / currSpeed);
+    }
+    //Move actor
+    func_8002D7EC(&this->dyna.actor);
+    Actor_UpdateBgCheckInfo(play, &this->dyna.actor, 1.0f, 60.0f, 70.0f, 0x07);
+    ObjBean_UpdatePosition(this);
+}
+
+
 void ObjBean_Update(Actor* thisx, PlayState* play) {
     s32 pad;
     ObjBean* this = (ObjBean*)thisx;
@@ -878,7 +1109,10 @@ void ObjBean_Update(Actor* thisx, PlayState* play) {
     this->actionFunc(this, play);
 
     if (this->stateFlags & BEAN_STATE_DRAW_PLANT) {
-        ObjBean_Move(this);
+        //ipi: Don't move the bean like normal
+        if (!CVarGetInteger("gIpiCrazyMode", 0)) {
+            ObjBean_Move(this);
+        }
         if (this->dyna.actor.xzDistToPlayer < 150.0f) {
             this->collider.dim.radius = this->dyna.actor.scale.x * 640.0f + 0.5f;
             Collider_UpdateCylinder(&this->dyna.actor, &this->collider);

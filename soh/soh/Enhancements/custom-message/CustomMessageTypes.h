@@ -73,6 +73,7 @@ typedef enum {
     TEXT_BEAN_SALESMAN_WANT_TO_PLANT = 0x406C,
     //ipi: Additional text replacements
     TEXT_BACK_ALLEY_DYING_GUARD_FIRST = 0x7007,
+    TEXT_BACK_ALLEY_DYING_GUARD_SECOND = 0x7008,
 } TextIDs;
 
 #ifdef __cplusplus

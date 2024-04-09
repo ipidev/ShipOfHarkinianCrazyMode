@@ -2628,8 +2628,13 @@ extern "C" int CustomMessage_RetrieveIfExists(PlayState* play) {
         messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_FISHERMAN_LEAVE);
     }
     //ipi: Additional text replacements
-    if (textId == TEXT_BACK_ALLEY_DYING_GUARD_FIRST && CVarGetInteger("gIpiCrazyMode", 0)) {
-        messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_BACK_ALLEY_DYING_GUARD_FIRST);
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (textId == TEXT_BACK_ALLEY_DYING_GUARD_FIRST) {
+            messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_BACK_ALLEY_DYING_GUARD_FIRST);
+        }
+        if (textId == TEXT_BACK_ALLEY_DYING_GUARD_SECOND) {
+            messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_BACK_ALLEY_DYING_GUARD_SECOND);
+        }
     }
     font->charTexBuf[0] = (messageEntry.GetTextBoxType() << 4) | messageEntry.GetTextBoxPosition();
     switch (gSaveContext.language) {

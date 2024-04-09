@@ -193,4 +193,10 @@ extern "C" void OTRMessage_Init()
         CustomMessage("Jack's having a piss!",
                       "Jack macht eine Pisse!",
                       "Jack pisse!"));
+    //ipi: Replace second dying guard text with instructions for Magic Bean controls
+    CustomMessageManager::Instance->CreateMessage(
+        customMessageTableID, TEXT_BACK_ALLEY_DYING_GUARD_SECOND,
+        CustomMessage("Ugh, I'm feeling too lazy to move...&Maybe you can help me!^While %rshielding%w with %cR%w, use the&%cControl Stick%w to move around,&and hold the %cA Button%w to ascend!",
+                      "Ugh, I'm feeling too lazy to move...&Maybe you can help me!^While %rshielding%w with %cR%w, use the&%cControl Stick%w to move around,&and hold the %cA Button%w to ascend!",
+                      "Ugh, I'm feeling too lazy to move...&Maybe you can help me!^While %rshielding%w with %cR%w, use the&%cControl Stick%w to move around,&and hold the %cA Button%w to ascend!"));
 }

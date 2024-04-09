@@ -686,6 +686,12 @@ void Play_Init(GameState* thisx) {
     else {
         gItemAgeReqs[ITEM_MASK_BUNNY] = gSlotAgeReqs[SLOT_TRADE_CHILD] = AGE_REQ_CHILD;
     }
+    //ipi: Allow adult Link to use Magic Beans
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        gItemAgeReqs[ITEM_BEAN] = gSlotAgeReqs[SLOT_BEAN] = AGE_REQ_NONE;
+    } else {
+        gItemAgeReqs[ITEM_BEAN] = gSlotAgeReqs[SLOT_BEAN] = AGE_REQ_CHILD;
+    }
     func_800304DC(play, &play->actorCtx, play->linkActorEntry);
 
     while (!func_800973FC(play, &play->roomCtx)) {
