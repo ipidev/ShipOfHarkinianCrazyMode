@@ -568,7 +568,9 @@ void EnBb_Blue(EnBb* this, PlayState* play) {
     this->bobPhase += 0.2f;
     Math_SmoothStepToF(&this->actor.speedXZ, this->maxSpeed, 1.0f, 0.5f, 0.0f);
 
-    if (Math_Vec3f_DistXZ(&this->actor.world.pos, &this->actor.home.pos) > 300.0f) {
+    //ipi: Pursue players for longer
+    f32 maxHomeDistance = CVarGetInteger("gIpiCrazyMode", 0) ? 500.0f : 300.0f;
+    if (Math_Vec3f_DistXZ(&this->actor.world.pos, &this->actor.home.pos) > maxHomeDistance) {
         this->vMoveAngleY = Math_Vec3f_Yaw(&this->actor.world.pos, &this->actor.home.pos);
         Math_SmoothStepToS(&this->actor.world.rot.y, this->vMoveAngleY, 1, 0x7D0, 0);
     } else {
@@ -583,7 +585,12 @@ void EnBb_Blue(EnBb* this, PlayState* play) {
                     Animation_PlayLoop(&this->skelAnime, &object_Bb_Anim_000184);
                     this->vMoveAngleY = this->actor.yawTowardsPlayer;
                 }
-                this->maxSpeed = (Rand_ZeroOne() * 1.5f) + 6.0f;
+                //ipi: Faster!
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    this->maxSpeed = 10.0f;
+                } else {
+                    this->maxSpeed = (Rand_ZeroOne() * 1.5f) + 6.0f;
+                }
                 this->timer = (Rand_ZeroOne() * 5.0f) + 20.0f;
                 this->actionState = BBBLUE_NORMAL;
             } else {
@@ -593,15 +600,23 @@ void EnBb_Blue(EnBb* this, PlayState* play) {
                 this->vMoveAngleY = Math_SinF(this->bobPhase) * 65535.0f;
             }
         }
-        if ((this->actor.xzDistToPlayer < 150.0f) && (this->actionState != BBBLUE_NORMAL)) {
+        //ipi: Charge at players from a longer distance
+        f32 maxChargeDistance = CVarGetInteger("gIpiCrazyMode", 0) ? 200.0f : 150.0f;
+        if ((this->actor.xzDistToPlayer < maxChargeDistance) && (this->actionState != BBBLUE_NORMAL)) {
             if (!this->charge) {
                 Animation_PlayLoop(&this->skelAnime, &object_Bb_Anim_000184);
-                this->maxSpeed = (Rand_ZeroOne() * 1.5f) + 6.0f;
-                this->timer = (Rand_ZeroOne() * 5.0f) + 20.0f;
+                //ipi: Charge faster and longer!
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    this->maxSpeed = 10.0f;
+                    this->timer = 40;
+                } else {
+                    this->maxSpeed = (Rand_ZeroOne() * 1.5f) + 6.0f;
+                    this->timer = (Rand_ZeroOne() * 5.0f) + 20.0f;
+                }
                 this->vMoveAngleY = this->actor.yawTowardsPlayer;
                 this->actionState = this->charge = true; // Sets actionState to BBBLUE_AGGRO
             }
-        } else if (this->actor.xzDistToPlayer < 200.0f) {
+        } else if (this->actor.xzDistToPlayer < maxChargeDistance + 50.0f) {
             this->vMoveAngleY = this->actor.yawTowardsPlayer;
         }
         if (this->targetActor == NULL) {
@@ -638,6 +653,8 @@ void EnBb_Blue(EnBb* this, PlayState* play) {
             Math_SmoothStepToS(&this->actor.world.rot.y, this->vMoveAngleY, 1, 0xBB8, 0);
         }
     }
+    //ipi: Turn faster if we're charging
+    s16 turnSpeed = CVarGetInteger("gIpiCrazyMode", 0) && this->charge ? 0x800 : 0x3E8;
     Math_SmoothStepToS(&this->actor.world.rot.y, this->vMoveAngleY, 1, 0x3E8, 0);
     if ((this->collider.base.acFlags & AC_HIT) || (this->collider.base.atFlags & AT_HIT)) {
         this->vMoveAngleY = this->actor.yawTowardsPlayer + 0x8000;
@@ -649,6 +666,12 @@ void EnBb_Blue(EnBb* this, PlayState* play) {
             if (play->gameplayFrames & 1) {
                 afterHitAngle = -0x4000;
             }
+        }
+        //ipi: Jinx player upon contact with blue bubbles
+        Player* player = GET_PLAYER(play);
+        if (CVarGetInteger("gIpiCrazyMode", 0) && this->collider.base.atFlags & AT_HIT
+            && this->collider.base.at == player && player->jinxTimer == 0) {
+            player->jinxTimer = 600;
         }
         this->actor.world.rot.y = this->actor.yawTowardsPlayer + afterHitAngle;
         this->collider.base.acFlags &= ~AC_HIT;

@@ -694,6 +694,8 @@ typedef struct Player {
     u8 frozenByStun;
     //ipi: Extra value to count down to random enemy spawn
     s16 timeUntilEnemyAmbush;
+    //ipi: Extra value to count down while jinxed
+    s16 jinxTimer;
 } Player; // size = 0xA94
 
 #endif

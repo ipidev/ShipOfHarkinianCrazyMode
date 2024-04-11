@@ -5765,6 +5765,11 @@ s32 func_8083BB20(Player* this) {
 
 s32 func_8083BBA0(Player* this, PlayState* play) {
     if (func_8083BB20(this) && (sFloorType != 7)) {
+        //ipi: Don't perform a jump slash while jinxed
+        if (this->jinxTimer > 0) {
+            Player_PlaySfx(&this->actor, NA_SE_SY_ERROR);
+            return 0;
+        }
         func_8083BA90(play, this, PLAYER_MWA_JUMPSLASH_START, 3.0f, 4.5f);
         return 1;
     }
@@ -5831,6 +5836,11 @@ s32 Player_ActionChange_10(Player* this, PlayState* play) {
                     }
                 } else {
                     if ((Player_GetMeleeWeaponHeld(this) != 0) && Player_CanUpdateItems(this)) {
+                        //ipi: Don't perform a grounded jump slash while jinxed
+                        if (this->jinxTimer > 0) {
+                            Player_PlaySfx(&this->actor, NA_SE_SY_ERROR);
+                            return 0;
+                        }
                         func_8083BA90(play, this, PLAYER_MWA_JUMPSLASH_START, 5.0f, 5.0f);
                     } else {
                         func_8083BC04(this, play);
@@ -8493,6 +8503,11 @@ s32 func_8084285C(Player* this, f32 arg1, f32 arg2, f32 arg3) {
 
 s32 func_808428D8(Player* this, PlayState* play) {
     if (Player_IsChildWithHylianShield(this) || !Player_GetMeleeWeaponHeld(this) || !sUseHeldItem) {
+        return 0;
+    }
+    //ipi: Disable crouch stabs while jinxed
+    if (this->jinxTimer > 0) {
+        Player_PlaySfx(&this->actor, NA_SE_SY_ERROR);
         return 0;
     }
 
@@ -11655,6 +11670,14 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
         //ipi: Allow the player to be randomly ambushed by enemies
         if (CVarGetInteger("gIpiCrazyMode", 0)) {
             Player_TrySpawnEnemyAmbush(this, play);
+            //Also decrement jinx timer
+            if (this->jinxTimer > 0) {
+                this->jinxTimer--;
+                //Reset timer if player plays Song of Storms
+                if (play->msgCtx.ocarinaMode == OCARINA_MODE_04 && play->msgCtx.unk_E3F2 == OCARINA_SONG_STORMS) {
+                    this->jinxTimer = 0;
+                }
+            }
         }
     }
 
@@ -11972,6 +11995,9 @@ void Player_Draw(Actor* thisx, PlayState* play2) {
                 POLY_OPA_DISP =
                     Gfx_SetFog2(POLY_OPA_DISP, 255, 0, 0, 0, 0, 4000 - (s32)(Math_CosS(this->unk_88F * 256) * 2000.0f));
             }
+        } else if (this->jinxTimer > 0) {
+            //ipi: Flash blue while jinxed
+            POLY_OPA_DISP = Gfx_SetFog2(POLY_OPA_DISP, 0, 0, 255, 0, 0, 4000 - (s32)(Math_SinS(this->jinxTimer * 0x800) * 2000.0f));
         }
 
         func_8002EBCC(&this->actor, play, 0);
@@ -12017,7 +12043,8 @@ void Player_Draw(Actor* thisx, PlayState* play2) {
 
         Player_DrawGameplay(play, this, lod, gCullBackDList, overrideLimbDraw);
 
-        if (this->invincibilityTimer > 0) {
+        //ipi: Disable fog when jinxed
+        if (this->invincibilityTimer > 0 || this->jinxTimer > 0) {
             POLY_OPA_DISP = Play_SetFog(play, POLY_OPA_DISP);
         }
 
@@ -14613,6 +14640,11 @@ void Player_UpdateBunnyEars(Player* this) {
 s32 Player_ActionChange_7(Player* this, PlayState* play) {
     if (func_8083C6B8(play, this) == 0) {
         if (func_8083BB20(this) != 0) {
+            //ipi: Don't swing the sword while jinxed
+            if (this->jinxTimer > 0) {
+                Player_PlaySfx(&this->actor, NA_SE_SY_ERROR);
+                return 0;
+            }
             s32 sp24 = func_80837818(this);
 
             func_80837948(play, this, sp24);
