@@ -481,7 +481,8 @@ void BossGanondrof_Neutral(BossGanondrof* this, PlayState* play) {
                         this->fwork[GND_FLOAT_SPEED] = 0.0f;
                         Audio_PlayActorSound2(thisx, NA_SE_EN_FANTOM_LAUGH);
                     }
-                } else if ((rand01 < 0.5f) || (this->work[GND_THROW_COUNT] < 5)) {
+                } else if (((rand01 < 0.5f) || (this->work[GND_THROW_COUNT] < 5) && !CVarGetInteger("gIpiCrazyMode", 0))) {
+                    //ipi: Go straight to volleying instead of shooting projectiles that might be reflected back
                     BossGanondrof_SetupThrow(this, play);
                 } else {
                     this->flyMode = GND_FLY_VOLLEY;

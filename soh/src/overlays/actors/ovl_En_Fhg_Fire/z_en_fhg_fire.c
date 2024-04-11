@@ -77,6 +77,10 @@ static ColliderCylinderInit sCylinderInit = {
     { 20, 30, 10, { 0, 0, 0 } },
 };
 
+//ipi: Hacky timer that pauses energy ball motion briefly
+static u8 sCrazyModePreventPauseTimer = 0;
+static u8 sCrazyModePauseTimer = 0;
+
 void EnFhgFire_SetUpdate(EnFhgFire* this, EnFhgFireUpdateFunc updateFunc) {
     this->updateFunc = updateFunc;
 }
@@ -428,6 +432,9 @@ void EnFhgFire_EnergyBall(EnFhgFire* this, PlayState* play) {
         this->work[FHGFIRE_KILL_TIMER]--;
         if (this->work[FHGFIRE_KILL_TIMER] == 0) {
             Actor_Kill(&this->actor);
+            //ipi: Also reset timers
+            sCrazyModePreventPauseTimer = 0;
+            sCrazyModePauseTimer = 0;
             return;
         }
     } else {
@@ -440,8 +447,16 @@ void EnFhgFire_EnergyBall(EnFhgFire* this, PlayState* play) {
         dxL = player->actor.world.pos.x - this->actor.world.pos.x;
         dyL = player->actor.world.pos.y + 40.0f - this->actor.world.pos.y;
         dzL = player->actor.world.pos.z - this->actor.world.pos.z;
-        func_8002D908(&this->actor);
-        func_8002D7EC(&this->actor);
+        //ipi: Occasionally pause the energy ball midfight to troll the player
+        if (sCrazyModePauseTimer == 0) {
+            func_8002D908(&this->actor);
+            func_8002D7EC(&this->actor);
+        } else {
+            sCrazyModePauseTimer--;
+        }
+        if (sCrazyModePreventPauseTimer > 0) {
+            sCrazyModePreventPauseTimer--;
+        }
         if (this->work[FHGFIRE_VARIANCE_TIMER] & 1) {
             Actor_SetScale(&this->actor, 6.0f);
         } else {
@@ -534,6 +549,13 @@ void EnFhgFire_EnergyBall(EnFhgFire* this, PlayState* play) {
                         Audio_PlayActorSound2(&this->actor, NA_SE_EN_FANTOM_LAUGH);
                     }
                     func_8002F698(play, &this->actor, 3.0f, this->actor.world.rot.y, 0.0f, 3, 0x10);
+                } else if (CVarGetInteger("gIpiCrazyMode", 0) && sCrazyModePreventPauseTimer == 0) {
+                    //ipi: Occasionally pause the energy ball midfight to troll the player
+                    if (Rand_ZeroOne() < 0.1f && this->work[FHGFIRE_RETURN_COUNT] >= 2 &&
+                        sqrtf(SQ(dxL) + SQ(dzL)) >= 150.0f && sqrtf(SQ(dxPG) + SQ(dzPG)) >= 150.0f) {
+                        sCrazyModePauseTimer = Rand_ZeroFloat(15.0f) + 5;
+                        sCrazyModePreventPauseTimer = sCrazyModePauseTimer + Rand_ZeroFloat(40.0f) + 15;
+                    }
                 }
                 break;
             case FHGFIRE_LIGHT_BLUE:
@@ -559,7 +581,14 @@ void EnFhgFire_EnergyBall(EnFhgFire* this, PlayState* play) {
                                                &D_801333E0, &D_801333E0, &D_801333E8);
                         Audio_PlaySoundGeneral(NA_SE_EN_FANTOM_DAMAGE, &bossGnd->actor.projectedPos, 4, &D_801333E0,
                                                &D_801333E0, &D_801333E8);
-                    }
+                    } /*else if (CVarGetInteger("gIpiCrazyMode", 0) && bossGnd->flyMode == GND_FLY_NEUTRAL) {
+                        //ipi: Accelerate away from Phantom Ganon if he won't attempt to return it
+#define SIGN(x) (x > 0.0f ? 1.0f : -1.0f)
+                        this->actor.world.pos.x -= (CLAMP_MIN(200.0f - ABS(dxPG), 0) * SIGN(dxPG)) * 0.033f;
+                        this->actor.world.pos.y -= (CLAMP_MIN(200.0f - ABS(dyPG), 0) * SIGN(dyPG)) * 0.033f;
+                        this->actor.world.pos.z -= (CLAMP_MIN(200.0f - ABS(dzPG), 0) * SIGN(dzPG)) * 0.033f;
+#undef SIGN
+                    }*/
                 }
                 break;
             case FHGFIRE_LIGHT_REFLECT:
