@@ -95,6 +95,11 @@ static InitChainEntry sInitChain[] = {
     ICHAIN_F32_DIV1000(gravity, -200, ICHAIN_STOP),
 };
 
+//ipi: Hacky globals to animate in funny ways
+static float sCrazyModeTurnSpeedScalar = 0.0f;
+static float sCrazyModeRotateSpeedScalar = 0.0f;
+static float sCrazyModeYSpeedScalar = 0.0f;
+
 void BgHidanDalm_Init(Actor* thisx, PlayState* play) {
     BgHidanDalm* this = (BgHidanDalm*)thisx;
     s32 pad;
@@ -147,6 +152,13 @@ void BgHidanDalm_Wait(BgHidanDalm* this, PlayState* play) {
         Flags_SetSwitch(play, this->switchFlag);
         Player_PlaySfx(&GET_PLAYER(play)->actor, NA_SE_IT_HAMMER_HIT);
         Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EV_DARUMA_VANISH);
+        //ipi: Spin in funny ways
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            sCrazyModeTurnSpeedScalar = Rand_CenteredFloat(2.0f);
+            sCrazyModeRotateSpeedScalar = Rand_CenteredFloat(2.0f);
+            sCrazyModeYSpeedScalar = Rand_ZeroOne();
+            this->dyna.actor.flags |= ACTOR_FLAG_UPDATE_WHILE_CULLED; //Just in case
+        }
     } else {
         CollisionCheck_SetAC(play, &play->colChkCtx, &this->collider.base);
     }
@@ -174,6 +186,13 @@ void BgHidanDalm_Shrink(BgHidanDalm* this, PlayState* play) {
         velocity.z = 5.0f * Math_CosS(this->dyna.actor.world.rot.y + 0x8000) + (Rand_ZeroOne() - 0.5f) * 5.0f;
         velocity.y = (Rand_ZeroOne() - 0.5f) * 1.5f;
         EffectSsKiraKira_SpawnSmallYellow(play, &pos, &velocity, &accel);
+    }
+
+    //ipi: Move in silly ways
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->dyna.actor.world.rot.y += 0x2000 * sCrazyModeTurnSpeedScalar;
+        this->dyna.actor.shape.rot.y += 0x3000 * sCrazyModeRotateSpeedScalar;
+        this->dyna.actor.velocity.y += sCrazyModeYSpeedScalar;
     }
 }
 
