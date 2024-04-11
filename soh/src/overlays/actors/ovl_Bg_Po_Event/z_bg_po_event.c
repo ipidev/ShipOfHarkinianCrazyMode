@@ -499,7 +499,8 @@ void BgPoEvent_PaintingEmpty(BgPoEvent* this, PlayState* play) {
 void BgPoEvent_PaintingAppear(BgPoEvent* this, PlayState* play) {
     this->timer -= 20;
     if (this->timer <= 0) {
-        this->timer = 1000;
+        //ipi: Faster!
+        this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 140 : 1000;
         this->actionFunc = BgPoEvent_PaintingPresent;
     }
 }
@@ -517,6 +518,10 @@ void BgPoEvent_PaintingPresent(BgPoEvent* this, PlayState* play) {
     Player* player = GET_PLAYER(play);
 
     DECR(this->timer);
+    //ipi: Change quicker while being observed
+    if (CVarGetInteger("gIpiCrazyMode", 0) && Player_IsFacingActor(thisx, 0x1000, play)) {
+        DECR(this->timer);
+    }
 
     if (((this->timer == 0) || ((thisx->xzDistToPlayer < 150.0f) && (thisx->yDistToPlayer < 50.0f)) ||
          (func_8002DD78(player) && (thisx->xzDistToPlayer < 320.0f) &&
