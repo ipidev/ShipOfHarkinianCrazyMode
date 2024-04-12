@@ -39,6 +39,8 @@ typedef struct {
     /* 0x0274 */ s16 maxStep;
     /* 0x0276 */ s16 minStep;
     /* 0x0278 */ s16 unk_278;
+    //ipi: Extra field to store breaking timer
+                 u8 breakTimer;
 } EnHata; // size = 0x027C
 
 #endif

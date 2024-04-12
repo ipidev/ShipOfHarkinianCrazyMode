@@ -117,6 +117,37 @@ void EnHata_Update(Actor* thisx, PlayState* play2) {
     this->limbs[FLAGPOLE_LIMB_FLAG_1_HOIST_END_BASE].z = -Math_Vec3f_Yaw(&zeroVec, &windVec);
     this->limbs[FLAGPOLE_LIMB_FLAG_2_HOIST_END_BASE].z = this->limbs[FLAGPOLE_LIMB_FLAG_1_HOIST_END_BASE].z;
     this->skelAnime.playSpeed = (Rand_ZeroFloat(1.25f) + 2.75f) * (play->envCtx.windSpeed / 255.0f);
+    //ipi: Break away if the player approaches us
+    Player* player = GET_PLAYER(play);
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->breakTimer == 0 && play->envCtx.windSpeed > 180.0f &&
+        this->dyna.actor.xzDistToPlayer < 100.0f && (player->actor.bgCheckFlags & 1)) {
+        this->breakTimer = 1;
+        this->dyna.actor.velocity.x = windVec.x * (Rand_CenteredFloat(0.008f) + 0.01f);
+        this->dyna.actor.velocity.y = windVec.y * (Rand_CenteredFloat(0.008f) + 0.01f);
+        this->dyna.actor.velocity.z = windVec.z * (Rand_CenteredFloat(0.008f) + 0.01f);
+        Audio_PlayActorSound2(&this->dyna.actor, NA_SE_EV_ELECTRIC_EXPLOSION);
+        //Spawn dust effects
+        for (s32 i = 0; i < 6; i++) {
+            Vec3f pos;
+            pos.x = this->dyna.actor.world.pos.x + Rand_CenteredFloat(40.0f);
+            pos.y = this->dyna.actor.world.pos.y + Rand_ZeroFloat(20.0f);
+            pos.z = this->dyna.actor.world.pos.z + Rand_CenteredFloat(40.0f);
+            func_800286CC(play, &pos, &this->dyna.actor.velocity, &this->dyna.actor.velocity, 450, 100);
+        }
+    } else if (this->breakTimer > 0) {
+        if (this->breakTimer < 50) {
+            //Fly and spin away
+            this->dyna.actor.velocity.x *= 1.15f;
+            this->dyna.actor.velocity.y *= 1.15f;
+            this->dyna.actor.velocity.z *= 1.15f;
+            this->dyna.actor.shape.rot.x += this->dyna.actor.velocity.z * 0x40;
+            this->dyna.actor.shape.rot.z += this->dyna.actor.velocity.x * 0x40;
+            func_8002D7EC(&this->dyna.actor);
+        } else {
+            Actor_Kill(&this->dyna.actor);
+        }
+        this->breakTimer++;
+    }
 }
 
 s32 EnHata_OverrideLimbDraw(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos, Vec3s* rot, void* thisx) {
