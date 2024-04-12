@@ -281,7 +281,8 @@ void func_80A6B91C(EnHorseNormal* this, PlayState* play) {
     this->action = HORSE_FOLLOW_PATH;
     this->animationIdx = 6;
     this->waypoint = 0;
-    this->actor.speedXZ = 7.0f;
+    //ipi: Faster!
+    this->actor.speedXZ = CVarGetInteger("gIpiCrazyMode", 0) ? 30.0f : 7.0f;
     Animation_Change(&this->skin.skelAnime, sAnimations[this->animationIdx], func_80A6B30C(this), 0.0f,
                      Animation_GetLastFrame(sAnimations[this->animationIdx]), ANIMMODE_ONCE, 0.0f);
 }
@@ -296,9 +297,13 @@ void EnHorseNormal_FollowPath(EnHorseNormal* this, PlayState* play) {
     pointPos += this->waypoint;
     dx = pointPos->x - this->actor.world.pos.x;
     dz = pointPos->z - this->actor.world.pos.z;
-    Math_SmoothStepToS(&this->actor.world.rot.y, Math_FAtan2F(dx, dz) * (0x8000 / M_PI), 0xA, 0x7D0, 1);
+    //ipi: Turn faster to account for higher speed
+    s16 turnSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 0x2400 : 0x7D0;
+    Math_SmoothStepToS(&this->actor.world.rot.y, Math_FAtan2F(dx, dz) * (0x8000 / M_PI), 0xA, turnSpeed, 1);
     this->actor.shape.rot.y = this->actor.world.rot.y;
-    if (SQ(dx) + SQ(dz) < 600.0f) {
+    //ipi: Larger (squared) radius to account for higher speed
+    f32 maxDistanceSquared = CVarGetInteger("gIpiCrazyMode", 0) ? 15000.0f : 600.0f;
+    if (SQ(dx) + SQ(dz) < maxDistanceSquared) {
         this->waypoint++;
         if (this->waypoint >= path->count) {
             this->waypoint = 0;
@@ -309,6 +314,21 @@ void EnHorseNormal_FollowPath(EnHorseNormal* this, PlayState* play) {
         Animation_Change(&this->skin.skelAnime, sAnimations[this->animationIdx], func_80A6B30C(this), 0.0f,
                          Animation_GetLastFrame(sAnimations[this->animationIdx]), ANIMMODE_ONCE, 0.0f);
         func_80A6BCEC(this);
+    }
+    //ipi: Kick up dust and activate attack hitbox
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        static Vec3f sZero = { 0.0f, 0.0f, 0.0f };
+        Vec3f pos;
+        pos.x = this->actor.world.pos.x + Rand_CenteredFloat(40.0f);
+        pos.y = this->actor.world.pos.y + Rand_ZeroFloat(20.0f);
+        pos.z = this->actor.world.pos.z + Rand_CenteredFloat(40.0f);
+        func_800286CC(play, &pos, &sZero, &sZero, 450, 100);
+        this->bodyCollider.base.atFlags |= AT_ON | AT_TYPE_ENEMY;
+        this->bodyCollider.info.toucherFlags = TOUCH_ON;
+        this->bodyCollider.info.toucher.dmgFlags = 0xFFCFFFFF;
+        this->bodyCollider.info.toucher.damage = 0x20;
+        this->bodyCollider.info.toucher.effect = 4;
+        CollisionCheck_SetAT(play, &play->colChkCtx, &this->bodyCollider);
     }
 }
 
