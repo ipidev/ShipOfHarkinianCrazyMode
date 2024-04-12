@@ -243,11 +243,22 @@ void EnFloormas_SetupTurn(EnFloormas* this) {
                          0.0f, ANIMMODE_ONCE, -3.0f);
     }
 
-    if (this->actor.scale.x > 0.004f) {
-        this->actionTarget = (rotDelta * (2.0f / 30.0f));
+    //ipi: The normal turning speed is way too slow
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        if (this->actor.scale.x > 0.004f) {
+            this->skelAnime.playSpeed *= 2.0f;
+            this->actionTarget = (rotDelta * (2.0f / 15.0f));
+        } else {
+            this->skelAnime.playSpeed *= 3.0f;
+            this->actionTarget = rotDelta * (2.0f / 10.0f);
+        }
     } else {
-        this->skelAnime.playSpeed = this->skelAnime.playSpeed + this->skelAnime.playSpeed;
-        this->actionTarget = rotDelta * (2.0f / 15.0f);
+        if (this->actor.scale.x > 0.004f) {
+            this->actionTarget = (rotDelta * (2.0f / 30.0f));
+        } else {
+            this->skelAnime.playSpeed = this->skelAnime.playSpeed + this->skelAnime.playSpeed;
+            this->actionTarget = rotDelta * (2.0f / 15.0f);
+        }
     }
     this->actionFunc = EnFloormas_Turn;
 }
@@ -265,14 +276,19 @@ void EnFloormas_SetupHover(EnFloormas* this, PlayState* play) {
 
 void EnFloormas_SetupCharge(EnFloormas* this) {
     this->actionTimer = 25;
-    this->actor.gravity = -0.15f;
+    //ipi: Stay aloft slightly longer
+    this->actor.gravity = CVarGetInteger("gIpiCrazyMode", 0) ? -0.1f : -0.15f;
     this->actionFunc = EnFloormas_Charge;
     this->actor.speedXZ = 0.5f;
+    //ipi: Increment charge counter
+    this->chargeCounter++;
 }
 
 void EnFloormas_SetupLand(EnFloormas* this) {
     Animation_Change(&this->skelAnime, &gWallmasterJumpAnim, 1.0f, 41.0f, 42.0f, ANIMMODE_ONCE, 5.0f);
-    if ((this->actor.speedXZ < 0.0f) || (this->actionFunc != EnFloormas_Charge)) {
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->actionTimer = 1;
+    } else if ((this->actor.speedXZ < 0.0f) || (this->actionFunc != EnFloormas_Charge)) {
         this->actionTimer = 30;
     } else {
         this->actionTimer = 45;
@@ -447,13 +463,16 @@ void EnFloormas_Die(EnFloormas* this, PlayState* play) {
 }
 
 void EnFloormas_BigDecideAction(EnFloormas* this, PlayState* play) {
-    if (SkelAnime_Update(&this->skelAnime)) {
+    //ipi: Just decide immeidately!
+    if (SkelAnime_Update(&this->skelAnime) || CVarGetInteger("gIpiCrazyMode", 0)) {
+        //ipi: React from further away
+        f32 baseDistance = CVarGetInteger("gIpiCrazyMode", 0) ? 350.0f : 280.0f;
         // within 400 units of link and within 90 degrees rotation of him
-        if (this->actor.xzDistToPlayer < 400.0f && !Actor_IsFacingPlayer(&this->actor, 0x4000)) {
+        if (this->actor.xzDistToPlayer < baseDistance + 120.0f && !Actor_IsFacingPlayer(&this->actor, 0x4000)) {
             this->actionTarget = this->actor.yawTowardsPlayer;
             EnFloormas_SetupTurn(this);
             // within 280 units of link and within 45 degrees rotation of him
-        } else if (this->actor.xzDistToPlayer < 280.0f && Actor_IsFacingPlayer(&this->actor, 0x2000)) {
+        } else if (this->actor.xzDistToPlayer < baseDistance && Actor_IsFacingPlayer(&this->actor, 0x2000)) {
             EnFloormas_SetupHover(this, play);
         } else {
             EnFloormas_SetupStand(this);
@@ -489,13 +508,15 @@ void EnFloormas_BigWalk(EnFloormas* this, PlayState* play) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_FALL_WALK);
     }
 
-    if ((this->actor.xzDistToPlayer < 320.0f) && (Actor_IsFacingPlayer(&this->actor, 0x4000))) {
+    //ipi: React from further away
+    f32 baseDistance = CVarGetInteger("gIpiCrazyMode", 0) ? 450.0f : 320.0f;
+    if ((this->actor.xzDistToPlayer < baseDistance) && (Actor_IsFacingPlayer(&this->actor, 0x4000))) {
         EnFloormas_SetupRun(this);
     } else if (this->actor.bgCheckFlags & 8) {
         // set target rotation to the colliding wall's rotation
         this->actionTarget = this->actor.wallYaw;
         EnFloormas_SetupTurn(this);
-    } else if ((this->actor.xzDistToPlayer < 400.0f) && !Actor_IsFacingPlayer(&this->actor, 0x4000)) {
+    } else if ((this->actor.xzDistToPlayer < baseDistance + 80.0f) && !Actor_IsFacingPlayer(&this->actor, 0x4000)) {
         // set target rotation to link.
         this->actionTarget = this->actor.yawTowardsPlayer;
         EnFloormas_SetupTurn(this);
@@ -563,7 +584,9 @@ void EnFloormas_Hover(EnFloormas* this, PlayState* play) {
     }
     this->actor.shape.rot.x += 0x140;
     this->actor.world.pos.y += 10.0f;
-    Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 3, 2730);
+    //ipi: Faster!
+    s16 turnSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 0x2000 : 2730;
+    Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 3, turnSpeed);
     Math_StepToS(&this->zOffset, 1200, 100);
 }
 
@@ -597,7 +620,9 @@ void EnFloormas_Charge(EnFloormas* this, PlayState* play) {
         this->actionTimer--;
     }
 
-    Math_StepToF(&this->actor.speedXZ, 15.0f, SQ(this->actor.speedXZ) * (1.0f / 3.0f));
+    //ipi: Faster!
+    f32 topSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 20.0f : 15.0f;
+    Math_StepToF(&this->actor.speedXZ, topSpeed, SQ(this->actor.speedXZ) * (1.0f / 3.0f));
     Math_ScaledStepToS(&this->actor.shape.rot.x, -0x1680, 0x140);
 
     distFromGround = this->actor.world.pos.y - this->actor.floorHeight;
@@ -611,6 +636,11 @@ void EnFloormas_Charge(EnFloormas* this, PlayState* play) {
         EnFloormas_Slide(this, play);
     }
 
+    //ipi: Also slightly turn towards the player
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Math_ApproachS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 3, 0x800);
+    }
+
     if ((this->actor.bgCheckFlags & 8) || (this->actionTimer == 0)) {
         EnFloormas_SetupLand(this);
     }
@@ -621,6 +651,16 @@ void EnFloormas_Land(EnFloormas* this, PlayState* play) {
 
     isOnGround = this->actor.bgCheckFlags & 1;
     if (this->actor.bgCheckFlags & 2) {
+        //ipi: After landing from the first charge, immediately hover again
+        if (CVarGetInteger("gIpiCrazyMode", 0) && (this->chargeCounter == 1 || Rand_ZeroOne() < 0.5f)) {
+            this->actor.shape.rot.y = this->actor.yawTowardsPlayer;
+            EnFloormas_SetupHover(this, play);
+            return;
+        } else {
+            //Reset charge counter and continue
+            this->chargeCounter = 0;
+        }
+
         if (this->actor.params != MERGE_MASTER) {
             EnFloormas_MakeVulnerable(this);
         }
@@ -816,7 +856,9 @@ void EnFloormas_GrabLink(EnFloormas* this, PlayState* play) {
         EnFloormas_SetupLand(this);
     } else {
         // Damage link every 20 frames
-        if ((this->actionTarget % 20) == 0) {
+        //ipi: Or more!
+        s16 damageFreq = CVarGetInteger("gIpiCrazyMode", 0) ? 8 : 20;
+        if ((this->actionTarget % damageFreq) == 0) {
             if (!LINK_IS_ADULT) {
                 Player_PlaySfx(&player->actor, NA_SE_VO_LI_DAMAGE_S_KID);
             } else {
@@ -957,6 +999,11 @@ void EnFloormas_TakeDamage(EnFloormas* this, PlayState* play) {
         }
     }
     Math_StepToF(&this->actor.speedXZ, 0.0f, 0.2f);
+    //ipi: Retaliate sooner
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->skelAnime.curFrame >= 10.0f &&
+        this->actor.colChkInfo.health != 0) {
+        EnFloormas_SetupHover(this, play);
+    }
 }
 
 void EnFloormas_Recover(EnFloormas* this, PlayState* play) {
@@ -1009,7 +1056,9 @@ void EnFloormas_ColliderCheck(EnFloormas* this, PlayState* play) {
                 }
 
                 if ((this->actor.colChkInfo.damageEffect == 4) || (this->actor.colChkInfo.damageEffect == 1)) {
-                    if (this->actionFunc != EnFloormas_Freeze) {
+                    //ipi: Also don't get stunned while charging
+                    if (this->actionFunc != EnFloormas_Freeze && (!CVarGetInteger("gIpiCrazyMode", 0) ||
+                        (this->actionFunc != EnFloormas_Hover && this->actionFunc != EnFloormas_Charge))) {
                         EnFloormas_SetupFreeze(this);
                     }
                 } else {
