@@ -86,6 +86,15 @@ static CollisionCheckInfoInit sColChkInfoInit = { 0, 12, 60, MASS_HEAVY };
 
 static f32 sUnused[] = { 10.0f, 9.2f };
 
+//ipi: Charge at the player when they're nearby
+s32 EnGoroiwa_CrazyModeShouldCharge(EnGoroiwa* this, PlayState* play) {
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        s16 angleToPlayer = this->actor.yawTowardsPlayer - this->actor.world.rot.y;
+        return this->actor.xzDistToPlayer < 600.0f && ABS(angleToPlayer) < 0x2800;
+    }
+    return false;
+}
+
 void EnGoroiwa_UpdateCollider(EnGoroiwa* this) {
     static f32 yOffsets[] = { 0.0f, 59.5f };
     Sphere16* worldSphere = &this->collider.elements[0].dim.worldSphere;
@@ -127,7 +136,11 @@ s32 EnGoroiwa_Vec3fNormalize(Vec3f* ret, Vec3f* a) {
 }
 
 void EnGoroiwa_SetSpeed(EnGoroiwa* this, PlayState* play) {
-    if (play->sceneNum == SCENE_KOKIRI_FOREST) {
+    //ipi: Faster!
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->isInKokiri = (play->sceneNum == SCENE_KOKIRI_FOREST);
+        R_EN_GOROIWA_SPEED = 1250;
+    } else if (play->sceneNum == SCENE_KOKIRI_FOREST) {
         this->isInKokiri = true;
         R_EN_GOROIWA_SPEED = 920;
     } else {
@@ -299,7 +312,10 @@ s32 EnGoroiwa_MoveAndFall(EnGoroiwa* this, PlayState* play) {
     s32 pad;
     Vec3s* nextPointPos;
 
-    Math_StepToF(&this->actor.speedXZ, R_EN_GOROIWA_SPEED * 0.01f, 0.3f);
+    //ipi: Move faster to charge at the player
+    s16 baseSpeed = EnGoroiwa_CrazyModeShouldCharge(this, play) ? R_EN_GOROIWA_SPEED * 2 : R_EN_GOROIWA_SPEED;
+    f32 speedStep = this->actor.speedXZ > R_EN_GOROIWA_SPEED * 0.01f ? 1.0f : 0.3f;
+    Math_StepToF(&this->actor.speedXZ, baseSpeed * 0.01f, speedStep);
     func_8002D868(&this->actor);
     path = &play->setupPathList[this->actor.params & 0xFF];
     nextPointPos = (Vec3s*)SEGMENTED_TO_VIRTUAL(path->points) + this->nextWaypoint;
@@ -322,7 +338,10 @@ s32 EnGoroiwa_Move(EnGoroiwa* this, PlayState* play) {
     nextPointPosF.x = nextPointPos->x;
     nextPointPosF.y = nextPointPos->y;
     nextPointPosF.z = nextPointPos->z;
-    Math_StepToF(&this->actor.speedXZ, R_EN_GOROIWA_SPEED * 0.01f, 0.3f);
+    //ipi: Move faster to charge at the player
+    s16 baseSpeed = EnGoroiwa_CrazyModeShouldCharge(this, play) ? R_EN_GOROIWA_SPEED * 2 : R_EN_GOROIWA_SPEED;
+    f32 speedStep = this->actor.speedXZ > R_EN_GOROIWA_SPEED * 0.01f ? 1.0f : 0.3f;
+    Math_StepToF(&this->actor.speedXZ, baseSpeed * 0.01f, speedStep);
     if (Math3D_Vec3fDistSq(&nextPointPosF, &this->actor.world.pos) < SQ(5.0f)) {
         Math_Vec3f_Diff(&nextPointPosF, &this->actor.world.pos, &posDiff);
     } else {
