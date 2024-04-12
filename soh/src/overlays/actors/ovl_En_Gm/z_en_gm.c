@@ -119,7 +119,8 @@ void func_80A3D838(EnGm* this, PlayState* play) {
         Collider_InitCylinder(play, &this->collider);
         Collider_SetCylinderType1(play, &this->collider, &this->actor, &sCylinderInit);
         ActorShape_Init(&this->actor.shape, 0.0f, ActorShadow_DrawCircle, 35.0f);
-        Actor_SetScale(&this->actor, 0.05f);
+        //ipi: Medigoron? More like Minigoron!
+        Actor_SetScale(&this->actor, CVarGetInteger("gIpiCrazyMode", 0) ? 0.005f : 0.05f);
         this->actor.colChkInfo.mass = MASS_IMMOVABLE;
         this->eyeTexIndex = 0;
         this->blinkTimer = 20;
@@ -178,12 +179,14 @@ void func_80A3DB04(EnGm* this, PlayState* play) {
     dx = this->talkPos.x - player->actor.world.pos.x;
     dz = this->talkPos.z - player->actor.world.pos.z;
 
+    //ipi: Larger to account for smaller model causing talkPos to be further away
+    f32 interactRange = CVarGetInteger("gIpiCrazyMode", 0) ? 150.0f : 100.0f;
     if (Flags_GetSwitch(play, this->actor.params)) {
         EnGm_SetTextID(this);
         this->actionFunc = func_80A3DC44;
     } else if (Actor_ProcessTalkRequest(&this->actor, play)) {
         this->actionFunc = func_80A3DBF4;
-    } else if ((this->collider.base.ocFlags1 & OC1_HIT) || (SQ(dx) + SQ(dz)) < SQ(100.0f)) {
+    } else if ((this->collider.base.ocFlags1 & OC1_HIT) || (SQ(dx) + SQ(dz)) < SQ(interactRange)) {
         this->collider.base.acFlags &= ~AC_HIT;
         func_8002F2CC(&this->actor, play, 415.0f);
     }
@@ -206,6 +209,8 @@ void func_80A3DC44(EnGm* this, PlayState* play) {
     dx = this->talkPos.x - player->actor.world.pos.x;
     dz = this->talkPos.z - player->actor.world.pos.z;
 
+    //ipi: Larger to account for smaller model causing talkPos to be further away
+    f32 interactRange = CVarGetInteger("gIpiCrazyMode", 0) ? 150.0f : 100.0f;
     if (Actor_ProcessTalkRequest(&this->actor, play)) {
         switch (func_80A3D7C8()) {
             case 0:
@@ -228,7 +233,7 @@ void func_80A3DC44(EnGm* this, PlayState* play) {
 
         this->actionFunc = EnGm_ProcessChoiceIndex;
     }
-    if ((this->collider.base.ocFlags1 & OC1_HIT) || (SQ(dx) + SQ(dz)) < SQ(100.0f)) {
+    if ((this->collider.base.ocFlags1 & OC1_HIT) || (SQ(dx) + SQ(dz)) < SQ(interactRange)) {
         this->collider.base.acFlags &= ~AC_HIT;
         func_8002F2CC(&this->actor, play, 415.0f);
     }
@@ -320,10 +325,15 @@ void func_80A3DFBC(EnGm* this, PlayState* play) {
     CollisionCheck_SetOC(play, &play->colChkCtx, &this->collider.base);
 }
 
+//ipi: Cached to avoid repeatedly checking console variable during draw routine
+s32 sIsIpiCrazyMode = false;
+
 void EnGm_Update(Actor* thisx, PlayState* play) {
     EnGm* this = (EnGm*)thisx;
 
     this->updateFunc(this, play);
+    //ipi: Set this flag during the lower tick-rate update, is later checked in draw function
+    sIsIpiCrazyMode = CVarGetInteger("gIpiCrazyMode", 0);
 }
 
 void func_80A3E090(EnGm* this) {
@@ -349,7 +359,8 @@ void func_80A3E090(EnGm* this) {
     Matrix_RotateZYX(this->actor.world.rot.x, this->actor.world.rot.y, this->actor.world.rot.z, MTXMODE_APPLY);
     vec1.x = vec1.y = vec1.z = 0.0f;
     Matrix_MultVec3f(&vec1, &this->actor.focus.pos);
-    this->actor.focus.pos.y += 100.0f;
+    //ipi: Alter the focus for the smaller model
+    this->actor.focus.pos.y += sIsIpiCrazyMode ? 0.0f : 100.0f;
 }
 
 void EnGm_Draw(Actor* thisx, PlayState* play) {
