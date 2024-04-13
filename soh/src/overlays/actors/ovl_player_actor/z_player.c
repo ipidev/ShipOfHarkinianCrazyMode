@@ -5788,10 +5788,29 @@ void func_8083BC04(Player* this, PlayState* play) {
 s32 func_8083BC7C(Player* this, PlayState* play) {
     if ((this->unk_84B[this->unk_846] == 0) && (sFloorType != 7)) {
         //ipi: Jump when rolling with the Bunny Hood
-        if (CVarGetInteger("gIpiCrazyMode", 0) && Player_GetMask(play) == PLAYER_MASK_BUNNY) {
+        if (CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_BUNNY) {
             func_8083A4A8(this, play);
-            this->actor.velocity.y = 15.0f;
+            //Jump higher if we have magic able to be consumed
+            if (gSaveContext.magic >= 2 && Magic_RequestChange(play, 2, MAGIC_CONSUME_NOW)) {
+                this->actor.velocity.y = 16.0f;
+                this->bunnyHoodMagicTimer = 20;
+            } else {
+                this->actor.velocity.y = 10.0f;
+            }
             Player_PlaySfx(this, NA_SE_IT_BOW_FLICK);
+            //Kick up dust
+            for (s32 i = 0; i < 4; i++) {
+                static Color_RGBA8 sColorWhite = { 250, 250, 250, 255 };
+                static Color_RGBA8 sColorGray = { 180, 180, 180, 255 };
+                static Vec3f sZeroVec = { 0.0f, 0.0f, 0.0f };
+                s16 randomAngle = (s16)Rand_Next();
+                Vec3f velocity;
+                velocity.x = Math_SinS(randomAngle) * (Rand_ZeroFloat(3.0f) + 2.0f);
+                velocity.y = 0.0f;
+                velocity.z = Math_CosS(randomAngle) * (Rand_ZeroFloat(3.0f) + 2.0f);
+                func_8002829C(play, &this->actor.world.pos, &velocity, &sZeroVec,
+                    &sColorWhite, &sColorGray, 120, 20);
+            }
             return 1;
         } else {
             func_8083BC04(this, play);
@@ -6576,6 +6595,8 @@ void func_8083DF68(Player* this, f32 arg1, s16 arg2) {
 
 void func_8083DFE0(Player* this, f32* arg1, s16* arg2) {
     s16 yawDiff = this->yaw - *arg2;
+    //ipi: Potentially use a higher speed step
+    f32 speedStepUp = 0.05f;
 
     if (this->meleeWeaponState == 0) {
         float maxSpeed = R_RUN_SPEED_LIMIT / 100.0f;
@@ -6591,7 +6612,13 @@ void func_8083DFE0(Player* this, f32* arg1, s16* arg2) {
 
         //ipi: Player has a higher top speed while airborne
         if (CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_BUNNY) {
-            maxSpeed *= 2.0f;
+            //Move even faster if we're currently using magic
+            if (this->bunnyHoodMagicTimer > 0) {
+                maxSpeed *= 3.0f;
+                speedStepUp *= 3.0f;
+            } else {
+                maxSpeed *= 2.0f;
+            }
         } else if (CVarGetInteger("gMMBunnyHood", BUNNY_HOOD_VANILLA) == BUNNY_HOOD_FAST_AND_JUMP && this->currentMask == PLAYER_MASK_BUNNY) {
             maxSpeed *= 1.5f;
         } 
@@ -6620,7 +6647,8 @@ void func_8083DFE0(Player* this, f32* arg1, s16* arg2) {
             this->yaw = *arg2;
         }
     } else {
-        Math_AsymStepToF(&this->linearVelocity, *arg1, 0.05f, 0.1f);
+        //ipi: Potentially use a higher speed step
+        Math_AsymStepToF(&this->linearVelocity, *arg1, speedStepUp, 0.1f);
         Math_ScaledStepToS(&this->yaw, *arg2, 200);
     }
 }
@@ -10493,7 +10521,12 @@ void func_808473D4(PlayState* play, Player* this) {
                           ((sFloorType != 7) && (func_80833B2C(this) ||
                                                  ((play->roomCtx.curRoom.behaviorType1 != ROOM_BEHAVIOR_TYPE1_2) &&
                                                   !(this->stateFlags1 & PLAYER_STATE1_SHIELDING) && (sp20 == 0))))))) {
-                        doAction = DO_ACTION_ATTACK;
+                        //ipi: Show jump instead if we have the Bunny Hood equipped
+                        if (CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_BUNNY) {
+                            doAction = DO_ACTION_JUMP;
+                        } else {
+                            doAction = DO_ACTION_ATTACK;
+                        }
                     } else if ((play->roomCtx.curRoom.behaviorType1 != ROOM_BEHAVIOR_TYPE1_2) &&
                                func_80833BCC(this) && (sp20 > 0)) {
                         doAction = DO_ACTION_JUMP;
@@ -11684,6 +11717,28 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
                 //Reset timer if player plays Song of Storms
                 if (play->msgCtx.ocarinaMode == OCARINA_MODE_04 && play->msgCtx.unk_E3F2 == OCARINA_SONG_STORMS) {
                     this->jinxTimer = 0;
+                }
+            }
+            //Also decrement mask magic counter
+            if (this->bunnyHoodMagicTimer > 0) {
+                this->bunnyHoodMagicTimer--;
+                //If ascending while using the Bunny Hood, create sparkles
+                if (this->currentMask == PLAYER_MASK_BUNNY && !(this->actor.bgCheckFlags & 1) && this->actor.velocity.y > 2.0f) {
+                    static Vec3f sZeroVec = { 0.0f, 0.0f, 0.0f };
+                    static Color_RGBA8 sWhite = { 255, 255, 255, 255 };
+                    Color_RGBA8 magicColour = { R_MAGIC_FILL_COLOR(0), R_MAGIC_FILL_COLOR(1), R_MAGIC_FILL_COLOR(2), 255 };
+                    if (CVarGetInteger("gCosmetics.Consumable_Magic.Changed", 0)) {
+                        Color_RGB8* magicColourPtr = (Color_RGB8*)&magicColour;
+                        *magicColourPtr = CVarGetColor24("gCosmetics.Consumable_Magic.Value", *magicColourPtr);
+                    }
+                    Vec3f pos;
+                    pos.x = this->actor.world.pos.x + Rand_CenteredFloat(20.0f);
+                    pos.y = this->actor.world.pos.y + Rand_ZeroFloat(15.0f);
+                    pos.z = this->actor.world.pos.z + Rand_CenteredFloat(20.0f);
+                    EffectSsKiraKira_SpawnDispersed(play, &pos, &sZeroVec, &sZeroVec, &sWhite, &magicColour, 2000, 20);
+                }
+                if (this->bunnyHoodMagicTimer == 0) {
+                    Magic_Reset(play);
                 }
             }
         }

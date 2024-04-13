@@ -696,6 +696,8 @@ typedef struct Player {
     s16 timeUntilEnemyAmbush;
     //ipi: Extra value to count down while jinxed
     s16 jinxTimer;
+    //ipi: Extra value to count down after using Bunny Hood with magic
+    u8 bunnyHoodMagicTimer;
 } Player; // size = 0xA94
 
 #endif
