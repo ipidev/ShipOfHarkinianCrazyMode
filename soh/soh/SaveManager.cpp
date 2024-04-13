@@ -63,7 +63,8 @@ SaveManager::SaveManager() {
     AddLoadFunction("base", 2, LoadBaseVersion2);
     AddLoadFunction("base", 3, LoadBaseVersion3);
     AddLoadFunction("base", 4, LoadBaseVersion4);
-    AddSaveFunction("base", 4, SaveBase, true, SECTION_PARENT_NONE);
+    AddLoadFunction("base", 5, LoadBaseVersion5);
+    AddSaveFunction("base", 5, SaveBase, true, SECTION_PARENT_NONE);
 
     AddLoadFunction("randomizer", 1, LoadRandomizerVersion1);
     AddLoadFunction("randomizer", 2, LoadRandomizerVersion2);
@@ -1934,6 +1935,12 @@ void SaveManager::LoadBaseVersion4() {
     SaveManager::Instance->LoadData("dogParams", gSaveContext.dogParams);
 }
 
+//ipi: Handle the extra flag for infinite magic
+void SaveManager::LoadBaseVersion5() {
+    LoadBaseVersion4();
+    SaveManager::Instance->LoadData("hasInfiniteMagic", gSaveContext.hasInfiniteMagic);
+}
+
 void SaveManager::SaveBase(SaveContext* saveContext, int sectionID, bool fullSave) {
     SaveManager::Instance->SaveData("entranceIndex", saveContext->entranceIndex);
     SaveManager::Instance->SaveData("linkAge", saveContext->linkAge);
@@ -2101,6 +2108,8 @@ void SaveManager::SaveBase(SaveContext* saveContext, int sectionID, bool fullSav
         SaveManager::Instance->SaveData("tempCollectFlags", saveContext->backupFW.tempCollectFlags);
     });
     SaveManager::Instance->SaveData("dogParams", saveContext->dogParams);
+    //ipi: Also save infinite magic setting
+    SaveManager::Instance->SaveData("hasInfiniteMagic", saveContext->hasInfiniteMagic);
 }
 
 // Load a string into a char array based on size and ensuring it is null terminated when overflowed

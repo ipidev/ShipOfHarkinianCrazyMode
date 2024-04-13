@@ -4388,6 +4388,8 @@ void KaleidoScope_Update(PlayState* play)
                 if (gSaveContext.deaths > 999) {
                     gSaveContext.deaths = 999;
                 }
+                //ipi: Reset infinite magic upon death
+                gSaveContext.hasInfiniteMagic = false;
             }
             osSyncPrintf("kscope->angle_s = %f\n", pauseCtx->unk_204);
             break;
@@ -4634,9 +4636,10 @@ void KaleidoScope_CrazyModeUpdateItemColour() {
 s32 KaleidoScope_CrazyModeIsModifiedItem(ItemID itemId) {
     //Note: this must be in order of item ID
     static u8 sModifiedItems[] = {
-        ITEM_NUT, ITEM_LONGSHOT, ITEM_ARROW_ICE, ITEM_BEAN, ITEM_WEIRD_EGG,
-        ITEM_CHICKEN, ITEM_MASK_KEATON, ITEM_MASK_SKULL, ITEM_MASK_BUNNY,
-        ITEM_MASK_ZORA, ITEM_POCKET_EGG, ITEM_POCKET_CUCCO, ITEM_BOOTS_HOVER,
+        ITEM_NUT, ITEM_LONGSHOT, ITEM_ARROW_ICE, ITEM_BEAN, ITEM_MILK_BOTTLE,
+        ITEM_MILK_HALF, ITEM_WEIRD_EGG, ITEM_CHICKEN, ITEM_MASK_KEATON,
+        ITEM_MASK_SKULL, ITEM_MASK_BUNNY, ITEM_MASK_ZORA, ITEM_POCKET_EGG,
+        ITEM_POCKET_CUCCO, ITEM_BOOTS_HOVER,
     };
     static s32 numModifiedItems = sizeof(sModifiedItems) / sizeof(u8);
 #ifdef _DEBUG

@@ -14020,6 +14020,11 @@ void Player_Action_8084EAC0(Player* this, PlayState* play) {
                             gSaveContext.healthAccumulator = CVarGetInteger("gHalfMilkHealth", 5) * 16;
                         }
                     }
+                    //ipi: Also apply infinite magic, a la Chateau Romani
+                    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                        gSaveContext.hasInfiniteMagic = true;
+                        Magic_Fill(play);
+                    }
                 } else {
                     if (sp28 & 1) {
                         gSaveContext.healthAccumulator = 0x140;
@@ -14031,6 +14036,11 @@ void Player_Action_8084EAC0(Player* this, PlayState* play) {
 
                     if (sp28 & 4) {
                         gSaveContext.healthAccumulator = 0x50;
+                        //ipi: Also apply infinite magic, a la Chateau Romani
+                        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                            gSaveContext.hasInfiniteMagic = true;
+                            Magic_Fill(play);
+                        }
                     }
                 }
             }

@@ -325,6 +325,8 @@ typedef struct {
     /*        */ u16 adultTradeItems;
     /*        */ u8 triforcePiecesCollected;
     // #endregion
+    //ipi: Extra flag to track infinite magic
+                 u8 hasInfiniteMagic;
 } SaveContext; // size = 0x1428
 
 typedef enum {

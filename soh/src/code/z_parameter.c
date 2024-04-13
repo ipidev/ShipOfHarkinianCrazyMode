@@ -3264,6 +3264,11 @@ s32 Magic_RequestChange(PlayState* play, s16 amount, s16 type) {
         return false;
     }
 
+    //ipi: With infinite magic, clear any amount passed in
+    if (gSaveContext.hasInfiniteMagic) {
+        amount = 0;
+    }
+
     if ((type != 5) && (gSaveContext.magic - amount) < 0) {
         if (gSaveContext.magicCapacity != 0) {
             Audio_PlaySoundGeneral(NA_SE_SY_ERROR, &D_801333D4, 4, &D_801333E0, &D_801333E0, &D_801333E8);
@@ -3425,7 +3430,10 @@ void Interface_UpdateMagicBar(PlayState* play) {
             break;
 
         case MAGIC_STATE_CONSUME:
-            gSaveContext.magic -= 2;
+            //ipi: Don't consume magic with infinite magic
+            if (!gSaveContext.hasInfiniteMagic) {
+                gSaveContext.magic -= 2;
+            }
             if (gSaveContext.magic <= 0) {
                 gSaveContext.magic = 0;
                 gSaveContext.magicState = MAGIC_STATE_METER_FLASH_1;
@@ -3573,6 +3581,44 @@ void Interface_UpdateMagicBar(PlayState* play) {
             gSaveContext.magicState = MAGIC_STATE_IDLE;
             break;
     }
+    //ipi: Always flash magic bar with infinite magic
+    if (gSaveContext.hasInfiniteMagic && gSaveContext.magicState == MAGIC_STATE_IDLE) {
+        //Copied from MAGIC_STATE_METER_FLASH_1/2/3 case above
+        temp = sMagicBorderIndexes[sMagicBorderStep];
+        borderChangeR = ABS(sMagicBorder.r - sMagicBorderColors[temp][0]) / sMagicBorderRatio;
+        borderChangeG = ABS(sMagicBorder.g - sMagicBorderColors[temp][1]) / sMagicBorderRatio;
+        borderChangeB = ABS(sMagicBorder.b - sMagicBorderColors[temp][2]) / sMagicBorderRatio;
+
+        if (sMagicBorder.r >= sMagicBorderColors[temp][0]) {
+            sMagicBorder.r -= borderChangeR;
+        } else {
+            sMagicBorder.r += borderChangeR;
+        }
+
+        if (sMagicBorder.g >= sMagicBorderColors[temp][1]) {
+            sMagicBorder.g -= borderChangeG;
+        } else {
+            sMagicBorder.g += borderChangeG;
+        }
+
+        if (sMagicBorder.b >= sMagicBorderColors[temp][2]) {
+            sMagicBorder.b -= borderChangeB;
+        } else {
+            sMagicBorder.b += borderChangeB;
+        }
+
+        sMagicBorderRatio--;
+        if (sMagicBorderRatio == 0) {
+            sMagicBorder.r = sMagicBorderColors[temp][0];
+            sMagicBorder.g = sMagicBorderColors[temp][1];
+            sMagicBorder.b = sMagicBorderColors[temp][2];
+            sMagicBorderRatio = YREG(40 + sMagicBorderStep);
+            sMagicBorderStep++;
+            if (sMagicBorderStep >= 4) {
+                sMagicBorderStep = 0;
+            }
+        }
+    }
 }
 
 void Interface_DrawLineupTick(PlayState* play) {
@@ -3609,6 +3655,15 @@ void Interface_DrawMagicBar(PlayState* play) {
     }
     if (CVarGetInteger("gCosmetics.Consumable_Magic.Changed", 0)) {
         magicbar_green = CVarGetColor24("gCosmetics.Consumable_Magic.Value", magicbar_green);
+    }
+    //ipi: If infinite magic is active, shift components to make a green magic bar blue (a la Chateau Romani)
+    if (gSaveContext.hasInfiniteMagic) {
+        u8 temp = magicbar_yellow.b;
+        magicbar_yellow.b = magicbar_yellow.g;
+        magicbar_yellow.r = magicbar_yellow.g = temp;
+        temp = magicbar_green.b;
+        magicbar_green.b = magicbar_green.g;
+        magicbar_green.r = magicbar_green.g = temp;
     }
 
     OPEN_DISPS(play->state.gfxCtx);
