@@ -3573,7 +3573,8 @@ void Interface_UpdateMagicBar(PlayState* play) {
             if ((play->pauseCtx.state == 0) && (play->pauseCtx.debugState == 0) &&
                 (msgCtx->msgMode == MSGMODE_NONE) && (play->gameOverCtx.state == GAMEOVER_INACTIVE) &&
                 (play->transitionTrigger == TRANS_TRIGGER_OFF) && (play->transitionMode == TRANS_MODE_OFF) && !Play_InCsMode(play)) {
-                if ((gSaveContext.magic == 0) || Player_GetMask(play) != PLAYER_MASK_ZORA) {
+                u8 playerMask = Player_GetMask(play);
+                if ((gSaveContext.magic == 0)) {
                     gSaveContext.magicState = MAGIC_STATE_IDLE;
                     if (CVarGetInteger("gCosmetics.Consumable_MagicBorder.Changed", 0)) {
                         sMagicBorder = CVarGetColor24("gCosmetics.Consumable_MagicBorder.Value", sMagicBorder_ori);

@@ -9294,6 +9294,10 @@ void Player_Action_80844708(Player* this, PlayState* play) {
             f32 rand = Rand_ZeroOne();
             uint8_t randomBonk = (rand <= .05) && GameInteractor_GetRandomBonksActive();
             if (this->linearVelocity >= 7.0f) {
+                //ipi: Also bonk if we hit something with the Goron roll collider
+                if (this->goronRollCollider.base.atFlags & AT_HIT) {
+                    randomBonk |= (this->goronRollCollider.base.at != NULL && this->goronRollCollider.base.at->colChkInfo.mass == MASS_IMMOVABLE);
+                }
                 if (randomBonk || ((this->actor.bgCheckFlags & 0x200) && (sWorldYawToTouchedWall < 0x2000)) ||
                     ((this->cylinder.base.ocFlags1 & OC1_HIT) &&
                      (cylinderOc = this->cylinder.base.oc,
@@ -9308,7 +9312,6 @@ void Player_Action_80844708(Player* this, PlayState* play) {
                             wallPolyActor->actor.home.rot.z = 1;
                         }
                     }
-
                     Player_AnimPlayOnce(play, this, GET_PLAYER_ANIM(PLAYER_ANIMGROUP_hip_down, this->modelAnimType));
                     this->linearVelocity = -this->linearVelocity;
                     Player_RequestQuake(play, 33267, 3, 12);
@@ -9316,6 +9319,14 @@ void Player_Action_80844708(Player* this, PlayState* play) {
                     Player_PlaySfx(this, NA_SE_PL_BODY_HIT);
                     func_80832698(this, NA_SE_VO_LI_CLIMB_END);
                     this->av2.actionVar2 = 1;
+                    //ipi: If using magical Goron roll, fly backwards further and become damaged
+                    if (Player_CrazyModeGoronMask(this, true)) {
+                        if (!(this->goronRollCollider.base.atFlags & AT_HIT)) {
+                            Health_ChangeBy(play, -0x08);
+                        }
+                        this->goronRollCollider.base.atFlags &= ~AT_HIT;
+                        this->actor.velocity.y = 4.0f;
+                    }
                     gSaveContext.sohStats.count[COUNT_BONKS]++;
                     GameInteractor_ExecuteOnPlayerBonk();
                     return;
@@ -9335,13 +9346,46 @@ void Player_Action_80844708(Player* this, PlayState* play) {
                     sp38 = 3.0f;
                 }
 
-                func_8083DF68(this, sp38, this->actor.shape.rot.y);
+                //ipi: Goron rolling is faster, and allows control during a roll
+                if (Player_CrazyModeGoronMask(this, false)) {
+                    s16 turnSpeed;
+                    //Even faster when using magic!
+                    if (Player_CrazyModeGoronMask(this, true)) {
+                        sp38 = 18.0f;
+                        turnSpeed = 0x100;
+                        this->skelAnime.playSpeed = 2.5f * D_808535E8; //Account for underwater speed modifier I guess?
+                        //Update hitbox with hammer damage
+                        Collider_UpdateCylinder(&this->actor, &this->goronRollCollider);
+                        CollisionCheck_SetAT(play, &play->colChkCtx, &this->goronRollCollider.base);
+                    } else {
+                        sp38 *= 1.3333f;
+                        sp38 = CLAMP_MIN(sp38, 8.0f);
+                        turnSpeed = 0x100 + ((12.0f - sp38) * 0x80); //Reduce turn rate at higher speed
+                        this->skelAnime.playSpeed = 1.25f * D_808535E8; //Account for underwater speed I guess?
+                    }
+                    //Actually use the yaw output of Player_GetMovementSpeedAndYaw to allow turning
+                    Math_StepToAngleS(&this->actor.shape.rot.y, sp36, turnSpeed);
+                    func_8083DF68(this, sp38, this->actor.shape.rot.y);
+                    //Spawn dust effects
+                    if (play->gameplayFrames & 1) {
+                        static Vec3f sZeroVec = { 0.0f, 0.0f, 0.0f };
+                        func_800286CC(play, &this->actor.world.pos, &sZeroVec, &sZeroVec, 200, 75);
+                    }
+                } else {
+                    func_8083DF68(this, sp38, this->actor.shape.rot.y);
 
-                if (func_8084269C(play, this)) {
-                    func_8002F8F0(&this->actor, NA_SE_PL_ROLL_DUST - SFX_FLAG);
+                    if (func_8084269C(play, this)) {
+                        func_8002F8F0(&this->actor, NA_SE_PL_ROLL_DUST - SFX_FLAG);
+                    }
                 }
 
                 Player_ProcessAnimSfxList(this, D_8085460C);
+            }
+
+            //ipi: Continue rolling if the player is holding A
+            if (Player_CrazyModeGoronMask(this, false) && this->skelAnime.curFrame >= 14.0f &&
+                CHECK_BTN_ANY(sControlInput->cur.button, BTN_A)) {
+                this->skelAnime.curFrame -= 13.0f;
             }
         }
     }
@@ -10099,6 +10143,27 @@ static ColliderQuadInit D_808546A0 = {
     { { { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } } },
 };
 
+//ipi: Extra collider used during crazy mode Goron roll
+static ColliderCylinderInit sCrazyModeGoronRollCylinderInit = {
+    {
+        COLTYPE_NONE,
+        AT_ON | AC_TYPE_PLAYER,
+        AC_NONE,
+        OC1_NONE,
+        OC2_TYPE_PLAYER,
+        COLSHAPE_CYLINDER,
+    },
+    {
+        ELEMTYPE_UNK2,
+        { 0x04000000, 0x00, 0x01 },
+        { 0x00000000, 0x00, 0x00 },
+        TOUCH_ON | TOUCH_SFX_NORMAL,
+        BUMP_NONE,
+        OCELEM_NONE,
+    },
+    { 25, 35, 0, { 0, 0, 0 } },
+};
+
 void func_8084663C(Actor* thisx, PlayState* play) {
 }
 
@@ -10227,6 +10292,9 @@ void Player_InitCommon(Player* this, PlayState* play, FlexSkeletonHeader* skelHe
     Collider_SetQuad(play, &this->meleeWeaponQuads[1], &this->actor, &D_80854650);
     Collider_InitQuad(play, &this->shieldQuad);
     Collider_SetQuad(play, &this->shieldQuad, &this->actor, &D_808546A0);
+    //ipi: Also initialise Goron roll collider. It only gets activated/updated in crazy mode
+    Collider_InitCylinder(play, &this->goronRollCollider);
+    Collider_SetCylinder(play, &this->goronRollCollider, &this->actor, &sCrazyModeGoronRollCylinderInit);
 
     this->ivanDamageMultiplier = 1;
 }
@@ -11719,23 +11787,15 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
                     this->jinxTimer = 0;
                 }
             }
-            //Also decrement mask magic counter
+            //Handle use of extramagic items
+            u8 spawnMagicSparkle = false;
+            float magicSparkleHeight = 0.0f;
             if (this->bunnyHoodMagicTimer > 0) {
                 this->bunnyHoodMagicTimer--;
                 //If ascending while using the Bunny Hood, create sparkles
                 if (this->currentMask == PLAYER_MASK_BUNNY && !(this->actor.bgCheckFlags & 1) && this->actor.velocity.y > 2.0f) {
-                    static Vec3f sZeroVec = { 0.0f, 0.0f, 0.0f };
-                    static Color_RGBA8 sWhite = { 255, 255, 255, 255 };
-                    Color_RGBA8 magicColour = { R_MAGIC_FILL_COLOR(0), R_MAGIC_FILL_COLOR(1), R_MAGIC_FILL_COLOR(2), 255 };
-                    if (CVarGetInteger("gCosmetics.Consumable_Magic.Changed", 0)) {
-                        Color_RGB8* magicColourPtr = (Color_RGB8*)&magicColour;
-                        *magicColourPtr = CVarGetColor24("gCosmetics.Consumable_Magic.Value", *magicColourPtr);
-                    }
-                    Vec3f pos;
-                    pos.x = this->actor.world.pos.x + Rand_CenteredFloat(20.0f);
-                    pos.y = this->actor.world.pos.y + Rand_ZeroFloat(15.0f);
-                    pos.z = this->actor.world.pos.z + Rand_CenteredFloat(20.0f);
-                    EffectSsKiraKira_SpawnDispersed(play, &pos, &sZeroVec, &sZeroVec, &sWhite, &magicColour, 2000, 20);
+                    spawnMagicSparkle = true;
+                    magicSparkleHeight = 15.0f;
                 }
                 if (this->bunnyHoodMagicTimer == 0) {
                     Magic_Reset(play);
@@ -11743,21 +11803,53 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
             }
             //Also check for continual mask magic
             if (gSaveContext.magicState != MAGIC_STATE_CRAZY_MODE_MASK) {
-                //Start magic use when the player enters water
                 if (this->currentMask == PLAYER_MASK_ZORA && this->actor.bgCheckFlags & 0x20) {
+                    //Start magic use when the player enters water
+                    Magic_RequestChange(play, 0, MAGIC_CONSUME_CRAZY_MODE_MASK);
+                } else if (this->currentMask == PLAYER_MASK_GORON && this->actionFunc == Player_Action_80844708) {
+                    //Start magic use when the player starts Goron rolling
                     Magic_RequestChange(play, 0, MAGIC_CONSUME_CRAZY_MODE_MASK);
                 }
             } else {
                 if (this->currentMask == PLAYER_MASK_ZORA) {
                     //If the player isn't moving, prevent magic from ticking down
-                    if (this->linearVelocity < 3.0f) {
+                    if (this->linearVelocity < 6.0f) {
                         play->interfaceCtx.unk_230 = 40;
+                    } else {
+                        spawnMagicSparkle = true;
+                        magicSparkleHeight = 40.0f;
                     }
                     //Stop magic use if the player exits water
                     if (!(this->actor.bgCheckFlags & 0x20)) {
                         Magic_Reset(play);
                     }
+                } else if (this->currentMask == PLAYER_MASK_GORON) {
+                    //Stop magic use if the player is no longer rolling, or has bonked
+                    if (this->actionFunc != Player_Action_80844708 || this->av2.actionVar2 != 0) {
+                        Magic_Reset(play);
+                    } else {
+                        spawnMagicSparkle = true;
+                        magicSparkleHeight = 30.0f;
+                    }
+                } else {
+                    //Not wearing a mask that uses the continual magic state, so reset magic
+                    Magic_Reset(play);
                 }
+            }
+            //Spawn magic-coloured sparkles if required
+            if (spawnMagicSparkle) {
+                static Vec3f sZeroVec = { 0.0f, 0.0f, 0.0f };
+                static Color_RGBA8 sWhite = { 255, 255, 255, 255 };
+                Color_RGBA8 magicColour = { R_MAGIC_FILL_COLOR(0), R_MAGIC_FILL_COLOR(1), R_MAGIC_FILL_COLOR(2), 255 };
+                if (CVarGetInteger("gCosmetics.Consumable_Magic.Changed", 0)) {
+                    Color_RGB8* magicColourPtr = (Color_RGB8*)&magicColour;
+                    *magicColourPtr = CVarGetColor24("gCosmetics.Consumable_Magic.Value", *magicColourPtr);
+                }
+                Vec3f pos;
+                pos.x = this->actor.world.pos.x + Rand_CenteredFloat(20.0f);
+                pos.y = this->actor.world.pos.y + Rand_ZeroFloat(magicSparkleHeight);
+                pos.z = this->actor.world.pos.z + Rand_CenteredFloat(20.0f);
+                EffectSsKiraKira_SpawnDispersed(play, &pos, &sZeroVec, &sZeroVec, &sWhite, &magicColour, 2000, 20);
             }
         }
     }
@@ -12283,6 +12375,14 @@ s16 func_8084ABD8(PlayState* play, Player* this, s32 arg2, s16 arg3) {
 //ipi: Extra function to shorten crazy mode Zora Mask checks
 s32 Player_CrazyModeZoraMask(Player* this, s32 checkMagic) {
     if (CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_ZORA) {
+        return (!checkMagic || gSaveContext.magicState == MAGIC_STATE_CRAZY_MODE_MASK);
+    }
+    return false;
+}
+
+//ipi: Extra function to shorten crazy mode Goron Mask checks
+s32 Player_CrazyModeGoronMask(Player* this, s32 checkMagic) {
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_GORON) {
         return (!checkMagic || gSaveContext.magicState == MAGIC_STATE_CRAZY_MODE_MASK);
     }
     return false;

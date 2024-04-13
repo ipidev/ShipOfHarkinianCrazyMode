@@ -698,6 +698,8 @@ typedef struct Player {
     s16 jinxTimer;
     //ipi: Extra value to count down after using Bunny Hood with magic
     u8 bunnyHoodMagicTimer;
+    //ipi: Extra collider used during crazy mode Goron roll
+    ColliderCylinder goronRollCollider;
 } Player; // size = 0xA94
 
 #endif
