@@ -10505,7 +10505,7 @@ void func_808473D4(PlayState* play, Player* this) {
                     doAction = DO_ACTION_GRAB;
                 } else if (this->stateFlags2 & PLAYER_STATE2_DIVING) {
                     //ipi: Calculate A button depth numbers differently with the Zora Mask (since it has infinite depth)
-                    if (Player_CrazyModeZoraMask(this)) {
+                    if (Player_CrazyModeZoraMask(this, false)) {
                         sp24 = 8 - (this->actor.yDistToWater / 150.0f);
                     } else {
                         sp24 = (D_80854784[CUR_UPG_VALUE(UPG_SCALE)] - this->actor.yDistToWater) / 40.0f;
@@ -11741,6 +11741,24 @@ void Player_UpdateCommon(Player* this, PlayState* play, Input* input) {
                     Magic_Reset(play);
                 }
             }
+            //Also check for continual mask magic
+            if (gSaveContext.magicState != MAGIC_STATE_CRAZY_MODE_MASK) {
+                //Start magic use when the player enters water
+                if (this->currentMask == PLAYER_MASK_ZORA && this->actor.bgCheckFlags & 0x20) {
+                    Magic_RequestChange(play, 0, MAGIC_CONSUME_CRAZY_MODE_MASK);
+                }
+            } else {
+                if (this->currentMask == PLAYER_MASK_ZORA) {
+                    //If the player isn't moving, prevent magic from ticking down
+                    if (this->linearVelocity < 3.0f) {
+                        play->interfaceCtx.unk_230 = 40;
+                    }
+                    //Stop magic use if the player exits water
+                    if (!(this->actor.bgCheckFlags & 0x20)) {
+                        Magic_Reset(play);
+                    }
+                }
+            }
         }
     }
 
@@ -12263,8 +12281,11 @@ s16 func_8084ABD8(PlayState* play, Player* this, s32 arg2, s16 arg3) {
 }
 
 //ipi: Extra function to shorten crazy mode Zora Mask checks
-s32 Player_CrazyModeZoraMask(Player* this) {
-    return CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_ZORA;
+s32 Player_CrazyModeZoraMask(Player* this, s32 checkMagic) {
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_ZORA) {
+        return (!checkMagic || gSaveContext.magicState == MAGIC_STATE_CRAZY_MODE_MASK);
+    }
+    return false;
 }
 
 void func_8084AEEC(Player* this, f32* arg1, f32 arg2, s16 arg3) {
@@ -12309,8 +12330,8 @@ void func_8084AEEC(Player* this, f32* arg1, f32 arg2, s16 arg3) {
 
         temp1 = this->skelAnime.curFrame - 10.0f;
 
-        //ipi: Swim much faster with the Zora Mask equipped
-        f32 multiplier = Player_CrazyModeZoraMask(this) ? 3.0f : 0.8f;
+        //ipi: Swim much faster with the Zora Mask equipped, but only while consuming magic
+        f32 multiplier = Player_CrazyModeZoraMask(this, true) ? 3.0f : 0.8f;
         temp2 = (R_RUN_SPEED_LIMIT / 100.0f) * multiplier;
         if (*arg1 > temp2) {
             *arg1 = temp2;
@@ -13561,7 +13582,7 @@ void Player_Action_8084DC48(Player* this, PlayState* play) {
             this->unk_6C2 = 16000;
 
             //ipi: Use different dive depths while wearing the Zora Mask
-            f32* diveDepths = Player_CrazyModeZoraMask(this) ? sCrazyModeZoraMaskDiveDepths : D_80854784;
+            f32* diveDepths = Player_CrazyModeZoraMask(this, false) ? sCrazyModeZoraMaskDiveDepths : D_80854784;
             if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_A) && !Player_ActionChange_2(this, play) &&
                 !(this->actor.bgCheckFlags & 1) && (this->actor.yDistToWater < diveDepths[CUR_UPG_VALUE(UPG_SCALE)])) {
                 func_8084DBC4(play, this, -2.0f);

@@ -21,7 +21,9 @@ typedef enum {
     /* 0x7 */ MAGIC_STATE_CONSUME_LENS, // Magic slowly consumed by lens.
     /* 0x8 */ MAGIC_STATE_STEP_CAPACITY, // Step `magicCapacity` to full capacity
     /* 0x9 */ MAGIC_STATE_FILL, // Add magic until magicFillTarget is reached.
-    /* 0xA */ MAGIC_STATE_ADD // Add requested magic
+    /* 0xA */ MAGIC_STATE_ADD, // Add requested magic
+    //ipi: Extra state for using continual mask magic
+              MAGIC_STATE_CRAZY_MODE_MASK,
 } MagicState;
 
 typedef enum {
@@ -30,7 +32,9 @@ typedef enum {
     /* 2 */ MAGIC_CONSUME_NOW_ALT, // Identical behaviour to MAGIC_CONSUME_NOW. Unused
     /* 3 */ MAGIC_CONSUME_LENS, // Lens consumption
     /* 4 */ MAGIC_CONSUME_WAIT_PREVIEW, // Sets consume target but waits to consume. Draws yellow magic to target consumption
-    /* 5 */ MAGIC_ADD // Sets a target to add magic
+    /* 5 */ MAGIC_ADD, // Sets a target to add magic
+    //ipi: Extra value for using continual mask magic
+            MAGIC_CONSUME_CRAZY_MODE_MASK,
 } MagicChangeType;
 
 #define MAGIC_NORMAL_METER 0x30
