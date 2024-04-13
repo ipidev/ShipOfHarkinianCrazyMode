@@ -230,6 +230,9 @@ void KaleidoScope_DrawItemCycleExtras(PlayState* play, u8 slot, u8 canCycle, u8 
             if (!CHECK_AGE_REQ_ITEM(leftItem)) {
                 gDPSetGrayscaleColor(POLY_KAL_DISP++, 109, 109, 109, 255);
                 gSPGrayscale(POLY_KAL_DISP++, true);
+            } else if (KaleidoScope_CrazyModeIsModifiedItem(leftItem)) {
+                //ipi: Overwrite preview item colour if it's been modified
+                gDPSetPrimColor(POLY_KAL_DISP++, 0, 0, gCrazyModeItemColour.r, gCrazyModeItemColour.g, gCrazyModeItemColour.b, pauseCtx->alpha);
             }
             KaleidoScope_DrawQuadTextureRGBA32(play->state.gfxCtx, gItemIcons[leftItem], 32, 32, 0);
             gSPGrayscale(POLY_KAL_DISP++, false);
@@ -238,6 +241,12 @@ void KaleidoScope_DrawItemCycleExtras(PlayState* play, u8 slot, u8 canCycle, u8 
             if (!CHECK_AGE_REQ_ITEM(rightItem)) {
                 gDPSetGrayscaleColor(POLY_KAL_DISP++, 109, 109, 109, 255);
                 gSPGrayscale(POLY_KAL_DISP++, true);
+            } else if (KaleidoScope_CrazyModeIsModifiedItem(rightItem)) {
+                //ipi: Overwrite preview item colour if it's been modified
+                gDPSetPrimColor(POLY_KAL_DISP++, 0, 0, gCrazyModeItemColour.r, gCrazyModeItemColour.g, gCrazyModeItemColour.b, pauseCtx->alpha);
+            } else {
+                //ipi: Also reset colour here, otherwise it may still appear rainbow if the left item is crazy mode modified
+                gDPSetPrimColor(POLY_KAL_DISP++, 0, 0, 255, 255, 255, pauseCtx->alpha);
             }
             KaleidoScope_DrawQuadTextureRGBA32(play->state.gfxCtx, gItemIcons[rightItem], 32, 32, 4);
             gSPGrayscale(POLY_KAL_DISP++, false);
@@ -721,7 +730,13 @@ void KaleidoScope_DrawItemSelect(PlayState* play) {
     gDPSetCombineMode(POLY_KAL_DISP++, G_CC_MODULATEIA_PRIM, G_CC_MODULATEIA_PRIM);
 
     for (i = j = 0; i < 24; i++, j += 4) {
-        gDPSetPrimColor(POLY_KAL_DISP++, 0, 0, 255, 255, 255, pauseCtx->alpha);
+        //ipi: Items that have been modified use a rainbow appearance
+        u8 isCrazyModeModifiedItem = CHECK_AGE_REQ_SLOT(i) && KaleidoScope_CrazyModeIsModifiedItem(gSaveContext.inventory.items[i]);
+        if (isCrazyModeModifiedItem) {
+            gDPSetPrimColor(POLY_KAL_DISP++, 0, 0, gCrazyModeItemColour.r, gCrazyModeItemColour.g, gCrazyModeItemColour.b, pauseCtx->alpha);
+        } else {
+            gDPSetPrimColor(POLY_KAL_DISP++, 0, 0, 255, 255, 255, pauseCtx->alpha);
+        }
 
         if (gSaveContext.inventory.items[i] != ITEM_NONE) {
             if ((pauseCtx->unk_1E4 == 0) && (pauseCtx->pageIndex == PAUSE_ITEM) && (pauseCtx->cursorSpecialPos == 0)) {

@@ -799,7 +799,11 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
 
             int itemId = ITEM_SWORD_KOKIRI + temp;
             bool age_restricted = !CHECK_AGE_REQ_ITEM(itemId);
-            if (age_restricted) {
+            //ipi: Items that have been modified use a rainbow appearance
+            u8 isCrazyModeModifiedItem = !age_restricted && KaleidoScope_CrazyModeIsModifiedItem(itemId);
+            if (isCrazyModeModifiedItem) {
+                gDPSetPrimColor(POLY_KAL_DISP++, 0, 0, gCrazyModeItemColour.r, gCrazyModeItemColour.g, gCrazyModeItemColour.b, pauseCtx->alpha);
+            } else if (age_restricted) {
                 gDPSetGrayscaleColor(POLY_KAL_DISP++, 109, 109, 109, 255);
                 gSPGrayscale(POLY_KAL_DISP++, true);
             }
@@ -810,7 +814,12 @@ void KaleidoScope_DrawEquipment(PlayState* play) {
             } else if (gBitFlags[bit] & gSaveContext.inventory.equipment) {
                 KaleidoScope_DrawQuadTextureRGBA32(play->state.gfxCtx, gItemIcons[itemId], 32, 32, point);
             }
-            gSPGrayscale(POLY_KAL_DISP++, false);
+            //ipi: Reset colour or grayscale as appropriate
+            if (isCrazyModeModifiedItem) {
+                gDPSetPrimColor(POLY_KAL_DISP++, 0, 0, 255, 255, 255, pauseCtx->alpha);
+            } else {
+                gSPGrayscale(POLY_KAL_DISP++, false);
+            }
         }
     }
 

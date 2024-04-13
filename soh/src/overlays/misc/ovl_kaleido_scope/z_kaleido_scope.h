@@ -51,4 +51,10 @@ void KaleidoScope_UpdateCursorSize(PauseContext* pauseCtx);
 
 void KaleidoScope_ResetItemCycling();
 
+//ipi: Rainbow colours to indicate items changed in crazy mode
+extern u8 gKaleidoInIpiCrazyMode;
+extern Color_RGB8 gCrazyModeItemColour;
+void KaleidoScope_CrazyModeUpdateItemColour();
+s32 KaleidoScope_CrazyModeIsModifiedItem(ItemID itemType);
+
 #endif

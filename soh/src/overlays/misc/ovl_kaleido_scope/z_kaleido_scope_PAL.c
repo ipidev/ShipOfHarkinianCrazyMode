@@ -21,6 +21,8 @@
 #include "soh/Enhancements/cosmetics/cosmeticsTypes.h"
 #include "soh/Enhancements/game-interactor/GameInteractor_Hooks.h"
 
+//ipi: For asserting modified item list is in order.
+#include <cassert>
 
 static void* sEquipmentFRATexs[] = {
     gPauseEquipment00FRATex, gPauseEquipment01Tex, gPauseEquipment02Tex, gPauseEquipment03Tex, gPauseEquipment04Tex,
@@ -4607,4 +4609,59 @@ void KaleidoScope_Update(PlayState* play)
     }
 
     GameInteractor_ExecuteOnKaleidoscopeUpdate(sInDungeonScene);
+
+    //ipi: Update crazy mode values
+    gKaleidoInIpiCrazyMode = CVarGetInteger("gIpiCrazyMode", 0);
+    KaleidoScope_CrazyModeUpdateItemColour();
+}
+
+//ipi: Cached once per frame to avoid churn during draw call
+u8 gKaleidoInIpiCrazyMode = false;
+
+//ipi: Rainbow colours to indicate items changed in crazy mode
+Color_RGB8 gCrazyModeItemColour = { 255, 255, 255 };
+
+//ipi: Compute a rainbow colour (HSV to RGB conversion adapted from BgHaka_Draw)
+void KaleidoScope_CrazyModeUpdateItemColour() {
+    static s16 sHue = 0;
+    gCrazyModeItemColour.r = Math_SinS(sHue) * 95 + 160;
+    gCrazyModeItemColour.g = Math_SinS(sHue - 0x5555) * 95 + 160;
+    gCrazyModeItemColour.b = Math_SinS(sHue - 0xAAAA) * 95 + 160;
+    sHue += 0x400;
+}
+
+//ipi: Check whether a given item is required or not
+s32 KaleidoScope_CrazyModeIsModifiedItem(ItemID itemId) {
+    //Note: this must be in order of item ID
+    static u8 sModifiedItems[] = {
+        ITEM_NUT, ITEM_LONGSHOT, ITEM_ARROW_ICE, ITEM_BEAN, ITEM_WEIRD_EGG,
+        ITEM_CHICKEN, ITEM_MASK_KEATON, ITEM_MASK_SKULL, ITEM_MASK_BUNNY,
+        ITEM_MASK_ZORA, ITEM_POCKET_EGG, ITEM_POCKET_CUCCO, ITEM_BOOTS_HOVER,
+    };
+    static s32 numModifiedItems = sizeof(sModifiedItems) / sizeof(u8);
+#ifdef _DEBUG
+    //Ensure all items are in order
+    for (s32 i = 1; i < numModifiedItems; i++) {
+        assert(sModifiedItems[i] > sModifiedItems[i - 1]);
+    }
+#endif //_DEBUG
+    //Only perform the search if we're in crazy mode
+    if (gKaleidoInIpiCrazyMode) {
+        //Binary search algorithm
+        s32 lowerBound = 0;
+        s32 upperBound = numModifiedItems - 1;
+        while (lowerBound <= upperBound) {
+            s32 midpoint = lowerBound + ((upperBound - lowerBound) / 2);
+            if (sModifiedItems[midpoint] == itemId) {
+                return true;
+            }
+            //Reduce bounds
+            if (sModifiedItems[midpoint] < itemId) {
+                lowerBound = midpoint + 1;
+            } else {
+                upperBound = midpoint - 1;
+            }
+        }
+    }
+    return false;
 }
