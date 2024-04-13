@@ -621,6 +621,9 @@ void SaveManager::InitFileNormal() {
     // Init with normal quest unless only an MQ rom is provided
     gSaveContext.questId = OTRGlobals::Instance->HasOriginal() ? QUEST_NORMAL : QUEST_MASTER;
 
+    //ipi: Ensure we don't start with infinite magic
+    gSaveContext.hasInfiniteMagic = false;
+    
     //RANDOTODO (ADD ITEMLOCATIONS TO GSAVECONTEXT)
 }
 
