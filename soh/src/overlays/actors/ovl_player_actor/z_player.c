@@ -10398,6 +10398,9 @@ void func_80847298(Player* this) {
 
 static f32 D_80854784[] = { 120.0f, 240.0f, 360.0f };
 
+//ipi: Extra set of maximum diving depths while wearing the Zora Mask
+static f32 sCrazyModeZoraMaskDiveDepths[] = { FLT_MAX, FLT_MAX, FLT_MAX };
+
 static u8 sDiveDoActions[] = { DO_ACTION_1, DO_ACTION_2, DO_ACTION_3, DO_ACTION_4,
                                DO_ACTION_5, DO_ACTION_6, DO_ACTION_7, DO_ACTION_8 };
 
@@ -10473,7 +10476,12 @@ void func_808473D4(PlayState* play, Player* this) {
                            (this->getItemId < GI_MAX)) {
                     doAction = DO_ACTION_GRAB;
                 } else if (this->stateFlags2 & PLAYER_STATE2_DIVING) {
-                    sp24 = (D_80854784[CUR_UPG_VALUE(UPG_SCALE)] - this->actor.yDistToWater) / 40.0f;
+                    //ipi: Calculate A button depth numbers differently with the Zora Mask (since it has infinite depth)
+                    if (Player_CrazyModeZoraMask(this)) {
+                        sp24 = 8 - (this->actor.yDistToWater / 150.0f);
+                    } else {
+                        sp24 = (D_80854784[CUR_UPG_VALUE(UPG_SCALE)] - this->actor.yDistToWater) / 40.0f;
+                    }
                     sp24 = CLAMP(sp24, 0, 7);
                     doAction = sDiveDoActions[sp24];
                 } else if (sp1C && !(this->stateFlags2 & PLAYER_STATE2_UNDERWATER)) {
@@ -12199,6 +12207,11 @@ s16 func_8084ABD8(PlayState* play, Player* this, s32 arg2, s16 arg3) {
     return func_80836AB8(this, (play->shootingGalleryStatus != 0) || func_8002DD78(this) || func_808334B4(this)) - arg3;
 }
 
+//ipi: Extra function to shorten crazy mode Zora Mask checks
+s32 Player_CrazyModeZoraMask(Player* this) {
+    return CVarGetInteger("gIpiCrazyMode", 0) && this->currentMask == PLAYER_MASK_ZORA;
+}
+
 void func_8084AEEC(Player* this, f32* arg1, f32 arg2, s16 arg3) {
     f32 temp1;
     f32 temp2;
@@ -12241,7 +12254,9 @@ void func_8084AEEC(Player* this, f32* arg1, f32 arg2, s16 arg3) {
 
         temp1 = this->skelAnime.curFrame - 10.0f;
 
-        temp2 = (R_RUN_SPEED_LIMIT / 100.0f) * 0.8f;
+        //ipi: Swim much faster with the Zora Mask equipped
+        f32 multiplier = Player_CrazyModeZoraMask(this) ? 3.0f : 0.8f;
+        temp2 = (R_RUN_SPEED_LIMIT / 100.0f) * multiplier;
         if (*arg1 > temp2) {
             *arg1 = temp2;
         }
@@ -12253,7 +12268,7 @@ void func_8084AEEC(Player* this, f32* arg1, f32 arg2, s16 arg3) {
             arg2 = 0.0f;
         }
 
-        Math_AsymStepToF(arg1, arg2 * 0.8f, temp1, (fabsf(*arg1) * 0.02f) + 0.05f);
+        Math_AsymStepToF(arg1, arg2 * multiplier, temp1, (fabsf(*arg1) * 0.02f) + 0.05f);
         Math_ScaledStepToS(&this->yaw, arg3, 1600);
     }
 }
@@ -13490,8 +13505,10 @@ void Player_Action_8084DC48(Player* this, PlayState* play) {
             func_8084B158(play, this, sControlInput, this->actor.velocity.y);
             this->unk_6C2 = 16000;
 
+            //ipi: Use different dive depths while wearing the Zora Mask
+            f32* diveDepths = Player_CrazyModeZoraMask(this) ? sCrazyModeZoraMaskDiveDepths : D_80854784;
             if (CHECK_BTN_ALL(sControlInput->cur.button, BTN_A) && !Player_ActionChange_2(this, play) &&
-                !(this->actor.bgCheckFlags & 1) && (this->actor.yDistToWater < D_80854784[CUR_UPG_VALUE(UPG_SCALE)])) {
+                !(this->actor.bgCheckFlags & 1) && (this->actor.yDistToWater < diveDepths[CUR_UPG_VALUE(UPG_SCALE)])) {
                 func_8084DBC4(play, this, -2.0f);
             } else {
                 this->av1.actionVar1++;
