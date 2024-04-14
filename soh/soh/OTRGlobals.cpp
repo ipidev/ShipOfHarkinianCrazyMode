@@ -2635,6 +2635,9 @@ extern "C" int CustomMessage_RetrieveIfExists(PlayState* play) {
         if (textId == TEXT_BACK_ALLEY_DYING_GUARD_SECOND) {
             messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_BACK_ALLEY_DYING_GUARD_SECOND);
         }
+        if (textId == TEXT_CHILD_RUTO_JABU_JABU_FIRST && play->sceneNum == SCENE_WATER_TEMPLE) {
+            messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_CHILD_RUTO_JABU_JABU_FIRST);
+        }
     }
     font->charTexBuf[0] = (messageEntry.GetTextBoxType() << 4) | messageEntry.GetTextBoxPosition();
     switch (gSaveContext.language) {

@@ -74,6 +74,7 @@ typedef enum {
     //ipi: Additional text replacements
     TEXT_BACK_ALLEY_DYING_GUARD_FIRST = 0x7007,
     TEXT_BACK_ALLEY_DYING_GUARD_SECOND = 0x7008,
+    TEXT_CHILD_RUTO_JABU_JABU_FIRST = 0x404C,
 } TextIDs;
 
 #ifdef __cplusplus

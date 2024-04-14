@@ -43,6 +43,10 @@ void func_80AF321C(EnRu2* this, PlayState* play);
 
 void func_80AF2AB4(EnRu2* this, PlayState* play);
 
+//ipi: Extra actions to handle talking to the player
+void EnRu2_CrazyModeWaterTempleEntranceWait(EnRu2* this, PlayState* play);
+void EnRu2_CrazyModeWaterTempleEntranceTalk(EnRu2* this, PlayState* play);
+
 static ColliderCylinderInitType1 sCylinderInit = {
     {
         COLTYPE_NONE,
@@ -69,6 +73,8 @@ static EnRu2ActionFunc sActionFuncs[] = {
     func_80AF2CB4, func_80AF2CD4, func_80AF2CF4, func_80AF2D2C, func_80AF2D6C, func_80AF2DAC, func_80AF2DEC,
     func_80AF3144, func_80AF3174, func_80AF31C8, func_80AF3604, func_80AF3624, func_80AF366C, func_80AF36AC,
     func_80AF3BC8, func_80AF3C04, func_80AF3C64, func_80AF3CB8, func_80AF3D0C, func_80AF3D60,
+    //ipi: Extra actions to handle talking to the player
+    EnRu2_CrazyModeWaterTempleEntranceWait, EnRu2_CrazyModeWaterTempleEntranceTalk,
 };
 
 static EnRu2DrawFunc sDrawFuncs[] = {
@@ -757,6 +763,45 @@ void func_80AF3D60(EnRu2* this, PlayState* play) {
     func_80AF3B74(this, play);
 }
 
+//ipi: Enable head tracking
+void EnRu2_CrazyModeWaterHeadTracking(EnRu2* this, PlayState* play) {
+    Player* player = GET_PLAYER(play);
+    this->interactInfo.trackPos = player->actor.world.pos;
+    this->interactInfo.yOffset = LINK_IS_ADULT ? -2.0f : 15.0f;
+    Npc_TrackPoint(&this->actor, &this->interactInfo, 10, NPC_TRACKING_HEAD);
+}
+
+//ipi: Extra actions to handle talking to the player
+void EnRu2_CrazyModeWaterTempleEntranceWait(EnRu2* this, PlayState* play) {
+    func_80AF2744(this, play);
+    EnRu2_UpdateSkelAnime(this);
+    Actor_SetFocus(&this->actor, 50.0f);
+    func_80AF259C(this, play);
+    CollisionCheck_SetOC(play, &play->colChkCtx, &this->collider.base);
+    EnRu2_CrazyModeWaterHeadTracking(this, play);
+    //Setup talking to player
+    if (!Actor_ProcessTalkRequest(&this->actor, play)) {
+        this->actor.flags |= ACTOR_FLAG_TARGETABLE | ACTOR_FLAG_FRIENDLY;
+        this->actor.textId = 0x404C;    //Reusing the text ID from first speaking with child Ruto in Jabu-Jabu
+        func_8002F2F4(&this->actor, play);
+    } else {
+        this->action = 21;
+    }
+}
+
+void EnRu2_CrazyModeWaterTempleEntranceTalk(EnRu2* this, PlayState* play) {
+    func_80AF2744(this, play);
+    EnRu2_UpdateSkelAnime(this);
+    Actor_SetFocus(&this->actor, 50.0f);
+    func_80AF259C(this, play);
+    CollisionCheck_SetOC(play, &play->colChkCtx, &this->collider.base);
+    EnRu2_CrazyModeWaterHeadTracking(this, play);
+    //Finish talking to player
+    if (Message_GetState(&play->msgCtx) == TEXT_STATE_DONE && Message_ShouldAdvance(play)) {
+        this->action = 20;
+    }
+}
+
 void EnRu2_Update(Actor* thisx, PlayState* play) {
     EnRu2* this = (EnRu2*)thisx;
 
@@ -785,6 +830,19 @@ void EnRu2_Init(Actor* thisx, PlayState* play) {
         case 4:
             func_80AF3744(this, play);
             break;
+        //ipi: Extra case to handle talking to the player at the entrance of the Water Temple
+        case 5:
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                func_80AF28E8(this, &gAdultRutoIdleAnim, 0, 0.0f, 0);
+                //Enable object collision
+                this->collider.base.ocFlags1 = OC1_ON | OC1_TYPE_PLAYER;
+                this->collider.base.ocFlags2 = OC2_TYPE_2;
+                this->collider.info.ocElemFlags = OCELEM_ON;
+                this->action = 20;
+                this->drawConfig = 1;
+                break;
+            }
+            //Fallthrough
         default:
             func_80AF2994(this, play);
             break;
@@ -793,6 +851,24 @@ void EnRu2_Init(Actor* thisx, PlayState* play) {
     this->unk_2C2 = 0;
     this->unk_2C3 = TEXT_STATE_DONE_FADING;
     this->subCamId = 0;
+}
+
+//ipi: Enable head tracking
+s32 EnRu2_OverrideLimbDraw(PlayState* play, s32 limbIndex, Gfx** dList, Vec3f* pos, Vec3s* rot,
+                                     void* thisx) {
+    EnRu2* this = (EnRu2*)thisx;
+    Vec3s angle;
+
+    static s32 setLimbIndex = 21;
+    s32 changingLimbIndex = (play->gameplayFrames / 32) % 23;
+    if (limbIndex == (setLimbIndex == -1 ? changingLimbIndex : setLimbIndex)) {
+        Matrix_Translate(1400.0f, 0.0f, 0.0f, MTXMODE_APPLY);
+        Matrix_RotateX(this->interactInfo.headRot.y * (M_PI / 32768.0f), MTXMODE_APPLY);
+        Matrix_RotateZ(this->interactInfo.headRot.x * (M_PI / 32768.0f), MTXMODE_APPLY);
+        Matrix_Translate(-1400.0f, 0.0f, 0.0f, MTXMODE_APPLY);
+    }
+
+    return 0;
 }
 
 void func_80AF3F14(EnRu2* this, PlayState* play) {
@@ -813,7 +889,13 @@ void func_80AF3F20(EnRu2* this, PlayState* play) {
     gDPSetEnvColor(POLY_OPA_DISP++, 0, 0, 0, 255);
     gSPSegment(POLY_OPA_DISP++, 0x0C, &D_80116280[2]);
 
-    SkelAnime_DrawSkeletonOpa(play, skelAnime, NULL, NULL, this);
+    //ipi: Enable limb override if we're in the crazy mode-exclusive actions
+    if (this->action >= 20) {
+        SkelAnime_DrawSkeletonOpa(play, skelAnime, EnRu2_OverrideLimbDraw, NULL, this);
+    } else {
+        SkelAnime_DrawSkeletonOpa(play, skelAnime, NULL, NULL, this);
+    }
+    
 
     CLOSE_DISPS(play->state.gfxCtx);
 }

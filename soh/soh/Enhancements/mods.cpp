@@ -1394,6 +1394,28 @@ void RegisterPauseMenuHooks() {
     });
 }
 
+//ipi: Additional hook for spawning crazy-mode specific actors
+void RegisterIpiCrazyModeActorSpawns() {
+    GameInteractor::Instance->RegisterGameHook<GameInteractor::OnSceneSpawnActors>([]() {
+        if (!gPlayState || !CVarGetInteger("gIpiCrazyMode", 0)) return;
+        switch (gPlayState->sceneNum) {
+            case SCENE_WATER_TEMPLE:
+                if (gPlayState->roomCtx.curRoom.num == 0) { //Entrance
+                    //Spawn Ruto telling Link about the lack of changes in Water Temple
+                    Actor_Spawn(&gPlayState->actorCtx, gPlayState, ACTOR_EN_RU2, -240.0f, 780.0f, 540.0f, 0, 0x1000, 0, 5, false);
+                    Actor_Spawn(&gPlayState->actorCtx, gPlayState, ACTOR_EN_OKUTA, -180.0f, 720.0f, -700.0f, 0, 0, 0, 0, false);
+                } else if (gPlayState->roomCtx.curRoom.num == 6) { //Room after lifts with hookshot target puzzle
+                    Actor_Spawn(&gPlayState->actorCtx, gPlayState, ACTOR_EN_OKUTA, -2900.0f, 600.0f, -550.0f, 0, 0, 0, 0, false);
+                } else if (gPlayState->roomCtx.curRoom.num == 12) { //Whirlpool room on 1F after getting Longshot
+                    Actor_Spawn(&gPlayState->actorCtx, gPlayState, ACTOR_EN_OKUTA, -180.0f, -50.0f, -2550.0f, 0, 0, 0, 0, false);
+                }
+                break;
+            default:
+                break;
+        }
+    });
+}
+
 void InitMods() {
     RegisterTTS();
     RegisterInfiniteMoney();
@@ -1433,4 +1455,6 @@ void InitMods() {
     RegisterPatchHandHandler();
     RegisterHurtContainerModeHandler();
     RegisterPauseMenuHooks();
+    //ipi: Additional hook for spawning crazy-mode specific actors
+    RegisterIpiCrazyModeActorSpawns();
 }

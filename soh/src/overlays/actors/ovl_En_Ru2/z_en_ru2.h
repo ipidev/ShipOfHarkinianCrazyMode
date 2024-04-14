@@ -28,6 +28,8 @@ typedef struct EnRu2 {
     /* 0x02C4 */ f32 unk_2C4;
     /* 0x02C8 */ ColliderCylinder collider;
     /* 0x02C8 */ s16 subCamId;
+    //ipi: Extra field to store head-tracking properties
+                 NpcInteractInfo interactInfo;
 } EnRu2; // size = 0x0314
 
 #endif

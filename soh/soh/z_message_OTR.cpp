@@ -199,4 +199,10 @@ extern "C" void OTRMessage_Init()
         CustomMessage("Ugh, I'm feeling too lazy to move...&Maybe you can help me!^While %rshielding%w with %cR%w, use the&%cControl Stick%w to move around,&and hold the %cA Button%w to ascend!",
                       "Ugh, I'm feeling too lazy to move...&Maybe you can help me!^While %rshielding%w with %cR%w, use the&%cControl Stick%w to move around,&and hold the %cA Button%w to ascend!",
                       "Ugh, I'm feeling too lazy to move...&Maybe you can help me!^While %rshielding%w with %cR%w, use the&%cControl Stick%w to move around,&and hold the %cA Button%w to ascend!"));
+    //ipi: Replace first child Ruto text with message for adult Ruto at the entrance to Water Temple
+    CustomMessageManager::Instance->CreateMessage(
+        customMessageTableID, TEXT_CHILD_RUTO_JABU_JABU_FIRST,
+        CustomMessage("Hello, @!&Have you also been seeing %rstrange&things%w happen around Hyrule?^I have just finished checking the&Water Temple. It seems that the&mechanisms here are %rtoo intricate&to be drastically changed%w.^Although, I did see more %rOctoroks%w&than usual... But that shouldn't be&a problem for you, right?",
+                      "Hello, @!&Have you also been seeing %rstrange&things%w happen around Hyrule?^I have just finished checking the&Water Temple. It seems that the&mechanisms here are %rtoo intricate&to be drastically changed%w.^Although, I did see more %rOctoroks%w&than usual... But that shouldn't be&a problem for you, right?",
+                      "Hello, @!&Have you also been seeing %rstrange&things%w happen around Hyrule?^I have just finished checking the&Water Temple. It seems that the&mechanisms here are %rtoo intricate&to be drastically changed%w.^Although, I did see more %rOctoroks%w&than usual... But that shouldn't be&a problem for you, right?"));
 }
