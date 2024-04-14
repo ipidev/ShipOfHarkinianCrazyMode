@@ -371,7 +371,10 @@ void func_80B12460(EnSyatekiNiw* this, PlayState* play) {
     Player* player = GET_PLAYER(play);
     f32 phi_f16 = 0.0f;
 
-    player->actor.freezeTimer = 10;
+    //ipi: Don't constantly freeze player, allow them to see the approaching cucco
+    if (!CVarGetInteger("gIpiCrazyMode", 0)) {
+        player->actor.freezeTimer = 10;
+    }
     switch (this->unk_29A) {
         case 0:
             this->unk_296 = 2;
@@ -458,7 +461,9 @@ void func_80B12460(EnSyatekiNiw* this, PlayState* play) {
             }
 
             if ((this->unk_25A == 0) && ((player->actor.world.pos.z - 30.0f) < this->actor.world.pos.z)) {
-                Audio_PlaySoundGeneral(NA_SE_VO_LI_DOWN, &this->actor.projectedPos, 4, &D_801333E0, &D_801333E0,
+                //ipi: Select the correct sound based on age
+                u16 sfxId = CVarGetInteger("gIpiCrazyMode", 0) && LINK_IS_CHILD ? NA_SE_VO_LI_DOWN_KID : NA_SE_VO_LI_DOWN;
+                Audio_PlaySoundGeneral(sfxId, &this->actor.projectedPos, 4, &D_801333E0, &D_801333E0,
                                        &D_801333E8);
                 this->unk_25E = 0x14;
                 this->unk_29A = 6;
@@ -468,12 +473,32 @@ void func_80B12460(EnSyatekiNiw* this, PlayState* play) {
 
         case 6:
             if (this->unk_25E == 1) {
-                play->transitionTrigger = TRANS_TRIGGER_START;
-                play->nextEntranceIndex = gSaveContext.entranceIndex;
-                play->shootingGalleryStatus = 0;
-                player->actor.freezeTimer = 20;
-                this->unk_25E = 0x14;
-                this->actionFunc = func_80B128D8;
+                //ipi: The original unused behaviour reloads the room. Restart the minigame instead
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    //Reset minigame
+                    play->shootingGalleryStatus = -1;
+                    //For some reason this cucco ends up in a completely broken state if I try and reset it
+                    //All the actor code is undocumented, so I can't really fix it... so spawn a fresh one!
+                    Actor* newCucco = Actor_Spawn(&play->actorCtx, play, ACTOR_EN_SYATEKI_NIW, this->actor.home.pos.x, this->actor.home.pos.y,
+                        this->actor.home.pos.z, this->actor.home.rot.x, this->actor.home.rot.y, this->actor.home.rot.z,
+                        this->actor.params, false);
+                    //Try to make it look like it's the same cucco by having it walk in from off-frame
+                    //Note: do this after spawning it, since the cucco sets its own home position in EnSyatekiNiw_Init
+                    if (newCucco != NULL) {
+                        newCucco->world.pos.x = (this->actor.world.pos.x + this->actor.home.pos.x) * 0.5f;
+                        newCucco->world.pos.z = (this->actor.world.pos.z + this->actor.home.pos.z) * 0.5f;
+                        newCucco->world.rot.y = Math_Vec3f_Yaw(&newCucco->world.pos, &newCucco->home.pos);
+                    }
+                    Actor_Kill(&this->actor);
+                    return;
+                } else {
+                    play->transitionTrigger = TRANS_TRIGGER_START;
+                    play->nextEntranceIndex = gSaveContext.entranceIndex;
+                    play->shootingGalleryStatus = 0;
+                    player->actor.freezeTimer = 20;
+                    this->unk_25E = 0x14;
+                    this->actionFunc = func_80B128D8;
+                }
             }
             break;
     }

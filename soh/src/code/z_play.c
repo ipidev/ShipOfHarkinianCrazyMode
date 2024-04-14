@@ -18,6 +18,9 @@
 #include <time.h>
 #include <assert.h>
 
+//ipi: To check if the shooting gallery cucco has been hit
+#include "overlays/actors/ovl_En_Syateki_Niw/z_en_syateki_niw.h"
+
 void* D_8012D1F0 = NULL;
 //UNK_TYPE D_8012D1F4 = 0; // unused
 Input* D_8012D1F8 = NULL;
@@ -2398,4 +2401,24 @@ void Play_PerformSave(PlayState* play) {
             Overlay_DisplayText(3.0f, "Game Saved");
         }
     }
+}
+
+//ipi: Prevent further action if the shooting gallery cucco has been hit
+//Note: not checking for crazy mode, as the actor with the required params isn't spawned otherwise
+s16 Play_HasHitShootingGalleryCucco(PlayState* play) {
+    //Skip if the shooting gallery minigame isn't active
+    if (play->shootingGalleryStatus > 0) {
+        Actor* prop = play->actorCtx.actorLists[ACTORCAT_PROP].head;
+        while (prop != NULL) {
+            if (prop->id == ACTOR_EN_SYATEKI_NIW) {
+                EnSyatekiNiw* shootingGalleryCucco = (EnSyatekiNiw*)prop;
+                //Ensure it's the shooting gallery behaviour (unk_29E == 0) and check the damaged flag (unk_29C)
+                if (shootingGalleryCucco->unk_29E == 0 && shootingGalleryCucco->unk_29C) {
+                    return true;
+                }
+            }
+            prop = prop->next;
+        }
+    }
+    return false;
 }

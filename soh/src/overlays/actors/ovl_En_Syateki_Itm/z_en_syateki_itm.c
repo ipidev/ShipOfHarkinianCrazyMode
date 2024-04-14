@@ -93,6 +93,10 @@ void EnSyatekiItm_Init(Actor* thisx, PlayState* play2) {
         }
         this->markers[i]->colorIdx = sRupeeTypes[i];
     }
+    //ipi: Also spawn the previously unused archery minigame Cucco
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        Actor_Spawn(&play->actorCtx, play, ACTOR_EN_SYATEKI_NIW, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0, false);
+    }
     this->actionFunc = EnSyatekiItm_Idle;
 }
 
@@ -285,6 +289,11 @@ void EnSyatekiItm_CheckTargets(EnSyatekiItm* this, PlayState* play) {
         this->signal = ENSYATEKI_END;
         this->actionFunc = EnSyatekiItm_CleanupGame;
     } else {
+        //ipi: Don't spawn further targets if the cucco has been hit
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            if (Play_HasHitShootingGalleryCucco(play)) return;
+        }
+
         for (i = 0, j = 0; i < 2; i++) {
             if (this->targetState[i] != ENSYATEKIHIT_NONE) {
                 if (this->targetState[i] == ENSYATEKIHIT_HIT) {

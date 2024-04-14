@@ -2480,6 +2480,9 @@ s16 Actor_CrazyModeCheckCivilianDamage(PlayState* play, Actor* actor, ColliderCy
 //ipi: Allow the player to be randomly ambushed by enemies
 s16 Player_GetEnemyAmbushTable(PlayState* play, CrazyModeEnemyAmbush** outTable, s32* outLength);
 
+//ipi: Prevent further action if the shooting gallery cucco has been hit
+s16 Play_HasHitShootingGalleryCucco(PlayState* play);
+
 #ifdef __cplusplus
 #undef this
 };

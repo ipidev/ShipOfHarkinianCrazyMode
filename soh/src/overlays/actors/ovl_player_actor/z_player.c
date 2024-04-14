@@ -2681,7 +2681,8 @@ s32 func_80834D2C(Player* this, PlayState* play) {
 }
 
 int func_80834E44(PlayState* play) {
-    return (play->shootingGalleryStatus > 0) && CHECK_BTN_ALL(sControlInput->press.button, BTN_B);
+    //ipi: Also prevent shooting if the shooting gallery cucco has been hit
+    return (play->shootingGalleryStatus > 0) && CHECK_BTN_ALL(sControlInput->press.button, BTN_B) && !Play_HasHitShootingGalleryCucco(play);
 }
 
 int func_80834E7C(PlayState* play) {
@@ -2819,7 +2820,9 @@ s32 func_808351D4(Player* this, PlayState* play) {
 
     func_80834EB8(this, play);
 
-    if ((this->unk_836 > 0) && ((this->unk_860 < 0) || (!sHeldItemButtonIsHeldDown && !func_80834E7C(play)))) {
+    //ipi: Also prevent loosing the currently-held arrow if the shooting gallery cucco has been hit
+    if ((this->unk_836 > 0) && ((this->unk_860 < 0) || (!sHeldItemButtonIsHeldDown && !func_80834E7C(play))) &&
+        !Play_HasHitShootingGalleryCucco(play)) {
         Player_SetUpperActionFunc(this, func_808353D8);
         if (this->unk_860 >= 0) {
             if (sp2C == 0) {
