@@ -173,7 +173,8 @@ void EnVm_SetupWait(EnVm* this) {
     Animation_Change(&this->skelAnime, &gBeamosAnim, 1.0f, frameCount, frameCount, ANIMMODE_ONCE, 0.0f);
     this->unk_25E = this->unk_260 = 0;
     this->unk_21C = 0;
-    this->timer = 10;
+    //ipi: Make timer as short as possible
+    this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 1 : 10;
     EnVm_SetupAction(this, EnVm_Wait);
 }
 
@@ -211,7 +212,12 @@ void EnVm_Wait(EnVm* this, PlayState* play) {
                     }
                 }
             } else {
-                this->headRotY -= 0x1F4;
+                //ipi: Always look directly towards player. Creepy!
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    this->headRotY = this->actor.yawTowardsPlayer - this->actor.shape.rot.y;
+                } else {
+                    this->headRotY -= 0x1F4;
+                }
             }
 
             SkelAnime_Update(&this->skelAnime);
@@ -225,7 +231,12 @@ void EnVm_Wait(EnVm* this, PlayState* play) {
     Math_SmoothStepToS(&this->headRotY, this->actor.yawTowardsPlayer - this->actor.shape.rot.y, 1, 0x1F40, 0);
 
     if (SkelAnime_Update(&this->skelAnime)) {
-        this->unk_260++;
+        //ipi: Skip second blink
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->unk_260 = 2;
+        } else {
+            this->unk_260++;
+        }
         this->skelAnime.curFrame = 0.0f;
     }
 
@@ -240,7 +251,8 @@ void EnVm_Wait(EnVm* this, PlayState* play) {
         if (this->beamRot.x < 0xAAA) {
             this->skelAnime.startFrame = this->skelAnime.curFrame = this->skelAnime.endFrame;
             this->unk_25E = this->unk_260 = 0;
-            this->timer = 10;
+            //ipi: Make timer as short as possible
+            this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? 1 : 10;
             this->skelAnime.playSpeed = 1.0f;
         } else {
             this->skelAnime.curFrame = 6.0f;
