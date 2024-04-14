@@ -215,7 +215,7 @@ void EnOkuta_SetupWaitToAppear(EnOkuta* this) {
     this->actor.world.pos.y = this->actor.home.pos.y;
     //ipi: No need for culled updates while hidden
     if (CVarGetInteger("gIpiCrazyMode", 0)) {
-        this->actor.flags |= ACTOR_FLAG_UPDATE_WHILE_CULLED;
+        this->actor.flags &= ~ACTOR_FLAG_UPDATE_WHILE_CULLED;
     }
 }
 
@@ -239,9 +239,9 @@ void EnOkuta_SetupHide(EnOkuta* this) {
 
 void EnOkuta_SetupWaitToShoot(EnOkuta* this) {
     Animation_PlayLoop(&this->skelAnime, &gOctorokFloatAnim);
-    //ipi: No waiting!
+    //ipi: Wait for a shorter time if we were shooting, but the player is out of sight
     if (CVarGetInteger("gIpiCrazyMode", 0)) {
-        this->timer = 0;
+        this->timer = (this->actionFunc == EnOkuta_Shoot) ? 1 : 0;
     } else {
         this->timer = (this->actionFunc == EnOkuta_Shoot) ? 2 : 0;
     }
@@ -251,8 +251,8 @@ void EnOkuta_SetupWaitToShoot(EnOkuta* this) {
 void EnOkuta_SetupShoot(EnOkuta* this, PlayState* play) {
     Animation_PlayOnce(&this->skelAnime, &gOctorokShootAnim);
     if (this->actionFunc != EnOkuta_Shoot) {
-        //ipi: Shoot a billion times for "fun"
-        this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? INT16_MAX : this->numShots;
+        //ipi: Shoot at least a few times without checking for line-of-sight
+        this->timer = CVarGetInteger("gIpiCrazyMode", 0) ? Rand_S16Offset(3, 2) : this->numShots;
     }
     this->jumpHeight = this->actor.yDistToPlayer + 20.0f;
     this->jumpHeight = CLAMP_MIN(this->jumpHeight, 10.0f);
@@ -383,12 +383,14 @@ void EnOkuta_WaitToShoot(EnOkuta* this, PlayState* play) {
     if (Animation_OnFrame(&this->skelAnime, 0.5f)) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_OCTAROCK_FLOAT);
     }
-    if (this->actor.xzDistToPlayer < 160.0f || this->actor.xzDistToPlayer > 560.0f) {
+    //ipi: Remain active from within a much larger range
+    f32 maxDistance = CVarGetInteger("gIpiCrazyMode", 0) ? 1000.0f : 560.0f;
+    if (this->actor.xzDistToPlayer < 160.0f || this->actor.xzDistToPlayer > maxDistance) {
         EnOkuta_SetupHide(this);
     } else {
         temp_v0_2 = Math_SmoothStepToS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 3, 0x71C, 0x38E);
         phi_v1 = ABS(temp_v0_2);
-        if ((phi_v1 < 0x38E) && (this->timer == 0) && (this->actor.yDistToPlayer < 200.0f)) {
+        if ((phi_v1 < 0x38E) && (this->timer == 0) && (this->actor.yDistToPlayer < maxDistance - 360.0f)) {
             EnOkuta_SetupShoot(this, play);
         }
     }
@@ -399,6 +401,24 @@ void EnOkuta_Shoot(EnOkuta* this, PlayState* play) {
     if (SkelAnime_Update(&this->skelAnime)) {
         if (this->timer != 0) {
             this->timer--;
+            //ipi: If we would stop shooting, check if the player is close or within line-of-sight
+            if (CVarGetInteger("gIpiCrazyMode", 0) && this->timer == 0) {
+                Player* player = GET_PLAYER(play);
+                Vec3f checkStart, checkEnd, hitPos;
+                checkStart.x = this->actor.world.pos.x;
+                checkStart.y = player->actor.world.pos.y + 20.0f;
+                checkStart.z = this->actor.world.pos.z;
+                checkEnd.x = player->actor.world.pos.x;
+                checkEnd.y = player->actor.world.pos.y + 20.0f;
+                checkEnd.z = player->actor.world.pos.z;
+                CollisionPoly* poly;
+                s32 bgId;
+                if ((Rand_Next() & 1) && (this->actor.xzDistToPlayer < 300.0f ||
+                    !BgCheck_EntityLineTest1(&play->colCtx, &checkStart, &checkEnd, &hitPos, &poly, true, true, true, true, &bgId))) {
+                    //Continue shooting
+                    this->timer = Rand_S16Offset(1, 2);
+                }
+            }
         }
         if (this->timer == 0) {
             EnOkuta_SetupWaitToShoot(this);
@@ -424,8 +444,8 @@ void EnOkuta_Shoot(EnOkuta* this, PlayState* play) {
     if (this->actor.xzDistToPlayer < 160.0f) {
         EnOkuta_SetupHide(this);
     }
-    //ipi: Need extra hide condition, or we loop forever
-    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.xzDistToPlayer > 1200.0f) {
+    //ipi: Fallback exit condition, just to avoid infinite loops
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.xzDistToPlayer > 1000.0f) {
         EnOkuta_SetupHide(this);
     }
 }
@@ -517,7 +537,7 @@ void EnOkuta_ProjectileFly(EnOkuta* this, PlayState* play) {
         this->actor.gravity = -1.0f;
     }
     //ipi: Act more like a rocket!
-    if (CVarGetInteger("gIpiCrazyMode", 0) && this->timer > 0) {
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->timer > 0 && !(this->collider.base.atFlags & AT_TYPE_PLAYER)) {
         Player* player = GET_PLAYER(play);
         Vec3f targetPos;
         targetPos.x = player->actor.world.pos.x;
@@ -565,19 +585,19 @@ void EnOkuta_ProjectileFly(EnOkuta* this, PlayState* play) {
              (player->currentShield == PLAYER_SHIELD_HYLIAN && LINK_IS_ADULT)) &&
             this->collider.base.atFlags & AT_HIT && this->collider.base.atFlags & AT_TYPE_ENEMY &&
             this->collider.base.atFlags & AT_BOUNCED) {
-            //ipi: Don't reflect back to Octorok, just reverse direction
+            this->collider.base.atFlags &= ~(AT_HIT | AT_BOUNCED | AT_TYPE_ENEMY);
+            this->collider.base.atFlags |= AT_TYPE_PLAYER;
+            this->collider.info.toucher.dmgFlags = 2;
+            //ipi: We need to modify velocity directly rather than only the direction
             if (CVarGetInteger("gIpiCrazyMode", 0)) {
-                this->actor.velocity.x *= -1.0f;
-                this->actor.velocity.y *= -1.0f;
-                this->actor.velocity.z *= -1.0f;
+                this->actor.velocity.x *= -0.75f;
+                this->actor.velocity.y *= -0.75f;
+                this->actor.velocity.z *= -0.75f;
             } else {
-                this->collider.base.atFlags &= ~(AT_HIT | AT_BOUNCED | AT_TYPE_ENEMY);
-                this->collider.base.atFlags |= AT_TYPE_PLAYER;
-                this->collider.info.toucher.dmgFlags = 2;
                 Matrix_MtxFToYXZRotS(&player->shieldMf, &sp40, 0);
                 this->actor.world.rot.y = sp40.y + 0x8000;
-                this->timer = 30;
             }
+            this->timer = 30;
         } else {
             pos.x = this->actor.world.pos.x;
             pos.y = this->actor.world.pos.y + 11.0f;
