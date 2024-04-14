@@ -26,7 +26,7 @@ void func_80A74AAC(EnIk* this);
 void func_80A74BA4(EnIk* this, PlayState* play);
 void func_80A74E2C(EnIk* this);
 void func_80A74EBC(EnIk* this, PlayState* play);
-void func_80A7506C(EnIk* this);
+void func_80A7506C(EnIk* this, PlayState* play);
 void func_80A7510C(EnIk* this, PlayState* play);
 void func_80A751C8(EnIk* this);
 void func_80A75260(EnIk* this, PlayState* play);
@@ -279,9 +279,17 @@ void func_80A74398(Actor* thisx, PlayState* play) {
 }
 
 s32 func_80A745E4(EnIk* this, PlayState* play) {
-    if (((this->unk_2FB != 0) || (this->actor.params == 0)) &&
-        (func_800354B4(play, &this->actor, 100.0f, 0x2710, 0x4000, this->actor.shape.rot.y) != 0) &&
-        (play->gameplayFrames & 1)) {
+    //ipi: Block regardless of armoured state, and react from slightly further away
+    u8 shouldBlock = false;
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        shouldBlock = func_800354B4(play, &this->actor, 150.0f, 0x2710, 0x4000, this->actor.shape.rot.y) != 0 &&
+            (play->gameplayFrames & 1);
+    } else {
+        shouldBlock = (((this->unk_2FB != 0) || (this->actor.params == 0)) &&
+            (func_800354B4(play, &this->actor, 100.0f, 0x2710, 0x4000, this->actor.shape.rot.y) != 0) &&
+            (play->gameplayFrames & 1));
+    }
+    if (shouldBlock) {
         func_80A755F0(this);
         return true;
     } else {
@@ -440,12 +448,28 @@ void func_80A74BA4(EnIk* this, PlayState* play) {
     }
     this->actor.shape.rot.y = this->actor.world.rot.y;
     yawDiff = this->actor.yawTowardsPlayer - this->actor.shape.rot.y;
-    if ((ABS(yawDiff) <= temp_t0) && (this->actor.xzDistToPlayer < 100.0f)) {
+    //ipi: Decide whether the Iron Knuckle can lunge towards the player, and increase the attack radius if so
+    u8 canLunge = false;
+    f32 maxAttackDistance = 100.0f;
+    if (CVarGetInteger("gIpiCrazyMode", 0) && !this->preventAnotherLunge) {
+        canLunge = this->unk_2FB != 0 && yawDiff < 0x1000 && (Rand_Next() % 4) == 0;
+        if (canLunge) {
+            maxAttackDistance = 160.0f;
+        }
+    }
+    if ((ABS(yawDiff) <= temp_t0) && (this->actor.xzDistToPlayer < maxAttackDistance)) {
         if (ABS(this->actor.yDistToPlayer) < 150.0f) {
             //ipi: Prefer the vertical attack if the player is directly in front of us or very close to us
-            u8 preferVerticalAttack = CVarGetInteger("gIpiCrazyMode", 0) && (yawDiff < 0x800 || isPlayerClose);
+            u8 preferVerticalAttack = CVarGetInteger("gIpiCrazyMode", 0) && (yawDiff < 0x800 || isPlayerClose || canLunge);
             if ((play->gameplayFrames & 1) || preferVerticalAttack) {
                 func_80A74E2C(this);
+                //ipi: Apply the lunge settings by jumping towards the player, do this after the setup function
+                if (canLunge) {
+                    this->actor.speedXZ = 7.0f;
+                    this->actor.velocity.y = 5.0f;
+                    this->lungeActive = true;
+                    this->preventAnotherLunge = true; //Prevented until our next attack, which can't be a lunge anymore
+                }
             } else {
                 func_80A751C8(this);
             }
@@ -483,6 +507,7 @@ void func_80A74E2C(EnIk* this) {
     //ipi: Faster!
     if (CVarGetInteger("gIpiCrazyMode", 0)) {
         this->skelAnime.playSpeed = 2.5f;
+        this->preventAnotherLunge = false;
     }
 }
 
@@ -507,6 +532,9 @@ void func_80A74EBC(EnIk* this, PlayState* play) {
             static Vec3f sZero = { 0.0f, 0.0f, 0.0f };
             sp2C.y += 10.0f;
             EffectSsBlast_SpawnWhiteShockwave(play, &sp2C, &sZero, &sZero);
+            //Stop the lunge
+            this->actor.speedXZ = 0.0f;
+            this->lungeActive = false;
         }
     }
 
@@ -514,10 +542,12 @@ void func_80A74EBC(EnIk* this, PlayState* play) {
         this->unk_2FE = 1;
     } else {
         //ipi: Continue turning towards the player regardless of armoured state
-        if (CVarGetInteger("gIpiCrazyMode", 0) && this->skelAnime.curFrame < 15.0f) {
-            s16 turnSpeed = this->unk_2FB != 0 ? 0xC000 : 0x600;
-            Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 0x5DC, 0);
-            this->actor.shape.rot.y = this->actor.world.rot.y;
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            if (this->skelAnime.curFrame < 15.0f && !this->lungeActive) {
+                s16 turnSpeed = this->unk_2FB != 0 ? 0xC000 : 0x600;
+                Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 0x5DC, 0);
+                this->actor.shape.rot.y = this->actor.world.rot.y;
+            }
         } else if ((this->unk_2FB != 0) && (this->skelAnime.curFrame < 10.0f)) {
             Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 0x5DC, 0);
             this->actor.shape.rot.y = this->actor.world.rot.y;
@@ -526,11 +556,11 @@ void func_80A74EBC(EnIk* this, PlayState* play) {
     }
 
     if (SkelAnime_Update(&this->skelAnime)) {
-        func_80A7506C(this);
+        func_80A7506C(this, play);
     }
 }
 
-void func_80A7506C(EnIk* this) {
+void func_80A7506C(EnIk* this, PlayState* play) {
     f32 frames = Animation_GetLastFrame(&gIronKnuckleAxeStuckAnim);
 
     this->unk_2FE = 0;
@@ -540,6 +570,14 @@ void func_80A7506C(EnIk* this) {
     Animation_Change(&this->skelAnime, &gIronKnuckleAxeStuckAnim, 1.0f, 0.0f, frames, ANIMMODE_LOOP, -4.0f);
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_IRONNACK_PULLOUT);
     EnIk_SetupAction(this, func_80A7510C);
+    //ipi: Unarmoured Iron Knuckles might skip the pull-out phase
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->unk_2FB != 0 && !this->preventAnotherLunge && (Rand_Next() & 1)) {
+        //Don't do this if the player is already downed from an attack, otherwise we stunlock them
+        frames = Animation_GetLastFrame(&gIronKnuckleRecoverFromVerticalAttackAnim);
+        this->unk_2F8 = 8;
+        this->unk_2F9 = (s8)frames;
+        Animation_Change(&this->skelAnime, &gIronKnuckleRecoverFromVerticalAttackAnim, 1.5f, 0.0f, frames, ANIMMODE_ONCE_INTERP, -4.0f);
+    }
 }
 
 void func_80A7510C(EnIk* this, PlayState* play) {
@@ -566,6 +604,7 @@ void func_80A751C8(EnIk* this) {
     Animation_Change(&this->skelAnime, &gIronKnuckleHorizontalAttackAnim, 0.0f, 0.0f, frames, ANIMMODE_ONCE_INTERP, -6.0f);
     this->unk_2FC = 0;
     EnIk_SetupAction(this, func_80A75260);
+    this->preventAnotherLunge = false;
 }
 
 void func_80A75260(EnIk* this, PlayState* play) {
@@ -783,9 +822,10 @@ void func_80A75C38(EnIk* this, PlayState* play) {
     Actor_SetColorFilter(&this->actor, 0x4000, 0xFF, 0, 0xC);
     prevHealth = this->actor.colChkInfo.health;
     Actor_ApplyDamage(&this->actor);
+    //ipi: Keep track of if we were armoured before taking damage, and shed outer armour at higher health value
+    u8 wasArmoured = (this->unk_2FB == 0);
+    u8 armourBreakHealth = CVarGetInteger("gIpiCrazyMode", 0) ? 20 : 10;
     if (this->actor.params != 0) {
-        //ipi: Shed outer armour at higher health value
-        u8 armourBreakHealth = CVarGetInteger("gIpiCrazyMode", 0) ? 20 : 10;
         if ((prevHealth > armourBreakHealth) && (this->actor.colChkInfo.health <= armourBreakHealth)) {
             this->unk_2FB = 1;
             BodyBreak_Alloc(&this->bodyBreak, 3, play);
@@ -813,13 +853,16 @@ void func_80A75C38(EnIk* this, PlayState* play) {
         }
     }
     if ((this->actor.params != 0) && (this->unk_2FB != 0)) {
-        if ((prevHealth > 10) && (this->actor.colChkInfo.health <= 10)) {
+        if ((prevHealth > armourBreakHealth) && (this->actor.colChkInfo.health <= armourBreakHealth)) {
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_IRONNACK_ARMOR_OFF_DEMO);
         } else {
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_IRONNACK_DAMAGE);
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_NUTS_CUTBODY);
         }
-        func_80A75790(this);
+        //ipi: Only play the hit reaction animation once
+        if (!CVarGetInteger("gIpiCrazyMode", 0) || wasArmoured) {
+            func_80A75790(this);
+        }
         return;
     }
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_IRONNACK_ARMOR_HIT);
@@ -888,7 +931,7 @@ void func_80A75FA0(Actor* thisx, PlayState* play) {
         shockwavePosition.y = this->actor.world.pos.y;
         shockwavePosition.z = this->actor.world.pos.z + (Math_CosS(this->actor.shape.rot.y + 0x6A4) * 70);
         Collider_SetCylinderPosition(&this->shockwaveCollider, &shockwavePosition);
-        this->shockwaveCollider.dim.radius = 50 + ((3 - this->shockwaveActive) * 20);
+        this->shockwaveCollider.dim.radius = 40 + ((3 - this->shockwaveActive) * 10);
         CollisionCheck_SetOC(play, &play->colChkCtx, &this->shockwaveCollider.base);
         //Count down
         this->shockwaveActive--;

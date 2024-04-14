@@ -38,6 +38,9 @@ typedef struct EnIk {
     //ipi: Extra collision for shockwave
                  ColliderCylinder shockwaveCollider;
                  u8 shockwaveActive;
+    //ipi: Extra flag for storing when we're lunging at the player
+                 u8 lungeActive;
+                 u8 preventAnotherLunge;
 } EnIk; // size = 0x04DC
 
 #endif
