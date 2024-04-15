@@ -330,8 +330,8 @@ void EnSkb_SetupAttack(EnSkb* this, PlayState* play) {
         Audio_PlayActorSound2(&this->actor, NA_SE_EN_STALKID_ATTACK);
         this->unk_281 = 1;
 
-        //ipi: Throw a bomb
-        if (CVarGetInteger("gIpiCrazyMode", 0))
+        //ipi: Throw a bomb - quick hack here to prevent throwing two bombs in one go
+        if (CVarGetInteger("gIpiCrazyMode", 0) && (play->gameplayFrames & 1))
         {
             Vec3f spawnPos;
             spawnPos.x = this->actor.world.pos.x + (Math_SinS(this->actor.shape.rot.y) * 100.0f * this->actor.scale.x);
