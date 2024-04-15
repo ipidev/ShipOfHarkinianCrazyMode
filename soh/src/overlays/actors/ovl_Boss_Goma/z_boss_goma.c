@@ -546,7 +546,9 @@ void BossGoma_SetupFloorStunned(BossGoma* this) {
  * Take an attack posture, when the player is close enough.
  */
 void BossGoma_SetupFloorAttackPosture(BossGoma* this) {
-    Animation_Change(&this->skelanime, &gGohmaPrepareAttackAnim, 1.0f, 0.0f,
+    //ipi: Faster!
+    f32 animSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 3.0f : 1.0f;
+    Animation_Change(&this->skelanime, &gGohmaPrepareAttackAnim, animSpeed, 0.0f,
                      Animation_GetLastFrame(&gGohmaPrepareAttackAnim), ANIMMODE_ONCE, -10.0f);
     this->actionFunc = BossGoma_FloorAttackPosture;
 }
@@ -562,7 +564,9 @@ void BossGoma_SetupFloorPrepareAttack(BossGoma* this) {
 }
 
 void BossGoma_SetupFloorAttack(BossGoma* this) {
-    Animation_Change(&this->skelanime, &gGohmaAttackAnim, 1.0f, 0.0f, Animation_GetLastFrame(&gGohmaAttackAnim),
+    //ipi: Faster!
+    f32 animSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 2.0f : 1.0f;
+    Animation_Change(&this->skelanime, &gGohmaAttackAnim, animSpeed, 0.0f, Animation_GetLastFrame(&gGohmaAttackAnim),
                      ANIMMODE_ONCE, -10.0f);
     this->actionFunc = BossGoma_FloorAttack;
     this->actionState = 0;
@@ -1278,8 +1282,14 @@ void BossGoma_FloorAttackPosture(BossGoma* this, PlayState* play) {
         }
     }
 
-    this->eyeState = EYESTATE_IRIS_FOLLOW_NO_IFRAMES;
-    this->visualState = VISUALSTATE_RED;
+    //ipi: Only become vulnerable after peforming the attack
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        this->eyeState = EYESTATE_IRIS_FOLLOW_BONUS_IFRAMES;
+        this->visualState = VISUALSTATE_DEFAULT;
+    } else {
+        this->eyeState = EYESTATE_IRIS_FOLLOW_NO_IFRAMES;
+        this->visualState = VISUALSTATE_RED;
+    }
 }
 
 /**
@@ -1350,6 +1360,13 @@ void BossGoma_FloorAttack(BossGoma* this, PlayState* play) {
             break;
     }
 
+    //ipi: Knock the player back if we swing into them
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        for (i = 0; i < this->collider.count; i++) {
+            this->collider.elements[i].info.toucher.effect = (this->actionState == 0) ? 0x04 : 0;
+        }
+    }
+
     this->eyeState = EYESTATE_IRIS_FOLLOW_NO_IFRAMES;
     this->visualState = VISUALSTATE_RED;
 }
@@ -1363,6 +1380,10 @@ void BossGoma_FloorDamaged(BossGoma* this, PlayState* play) {
     if (Animation_OnFrame(&this->skelanime, Animation_GetLastFrame(&gGohmaDamageAnim))) {
         BossGoma_SetupFloorStunned(this);
         this->patienceTimer = 0;
+        //ipi: Reduce the remaining time that we're stunned for
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->framesUntilNextAction /= 2;
+        }
     }
 
     this->eyeState = EYESTATE_IRIS_NO_FOLLOW_NO_IFRAMES;
@@ -1382,7 +1403,8 @@ void BossGoma_FloorLandStruckDown(BossGoma* this, PlayState* play) {
         BossGoma_SetupFloorStunned(this);
         this->sfxFaintTimer = 92;
         this->patienceTimer = 0;
-        this->framesUntilNextAction = 150;
+        //ipi: Don't stay stunned for quite this long
+        this->framesUntilNextAction = CVarGetInteger("gIpiCrazyMode", 0) ? 60 : 150;
     }
 
     Actor_SpawnFloorDustRing(play, &this->actor, &this->actor.world.pos, 55.0f, 4, 8.0f, 500, 10, true);
@@ -1742,6 +1764,15 @@ void BossGoma_UpdateEye(BossGoma* this, PlayState* play) {
             if (this->frameCount % 16 == 0 && Rand_ZeroOne() < 0.3f) {
                 this->eyeClosedTimer = 7;
             }
+
+            //ipi: Also close the eye if the player is using a Deku Nut
+            if (CVarGetInteger("gIpiCrazyMode", 0) && this->eyeClosedTimer == 0) {
+                Actor* arrow = Actor_FindNearby(play, &this->actor, ACTOR_EN_ARROW, ACTORCAT_ITEMACTION, 500.0f);
+                Actor* dekuNutFlash = Actor_FindNearby(play, &this->actor, ACTOR_EN_M_FIRE1, ACTORCAT_MISC, 500.0f);
+                if ((arrow != NULL && arrow->params == 10) || dekuNutFlash != NULL) {
+                    this->eyeClosedTimer = 15;
+                }
+            }
         }
 
         if (this->childrenGohmaState[0] > 0 || this->childrenGohmaState[1] > 0 || this->childrenGohmaState[2] > 0) {
@@ -1858,6 +1889,10 @@ void BossGoma_UpdateHit(BossGoma* this, PlayState* play) {
                     this->framesUntilNextAction = 40;
                 } else {
                     this->framesUntilNextAction = 90;
+                }
+                //ipi: Don't stay stunned for quite as long
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    this->framesUntilNextAction /= 2;
                 }
 
                 this->timer = 4;
