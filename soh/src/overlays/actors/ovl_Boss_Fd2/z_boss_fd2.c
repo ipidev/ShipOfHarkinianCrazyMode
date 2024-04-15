@@ -322,7 +322,10 @@ void BossFd2_SetupIdle(BossFd2* this, PlayState* play) {
     Animation_PlayLoop(&this->skelAnime, &gHoleVolvagiaTurnAnim);
     this->actionFunc = BossFd2_Idle;
     health = bossFd->actor.colChkInfo.health;
-    if (health == 24) {
+    //ipi: Skip idle time and immediately attack
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        idleTime = 0;
+    } else if (health == 24) {
         idleTime = 50;
     } else if (health >= 18) {
         idleTime = 40;
