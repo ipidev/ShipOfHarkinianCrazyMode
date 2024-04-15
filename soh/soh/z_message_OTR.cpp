@@ -205,4 +205,11 @@ extern "C" void OTRMessage_Init()
         CustomMessage("Hello, @!&Have you also been seeing %rstrange&things%w happen around Hyrule?^I have just finished checking the&Water Temple. It seems that the&mechanisms here are %rtoo intricate&to be drastically changed%w.^Although, I did see more %rOctoroks%w&than usual... But that shouldn't be&a problem for you, right?",
                       "Hello, @!&Have you also been seeing %rstrange&things%w happen around Hyrule?^I have just finished checking the&Water Temple. It seems that the&mechanisms here are %rtoo intricate&to be drastically changed%w.^Although, I did see more %rOctoroks%w&than usual... But that shouldn't be&a problem for you, right?",
                       "Hello, @!&Have you also been seeing %rstrange&things%w happen around Hyrule?^I have just finished checking the&Water Temple. It seems that the&mechanisms here are %rtoo intricate&to be drastically changed%w.^Although, I did see more %rOctoroks%w&than usual... But that shouldn't be&a problem for you, right?"));
+    //ipi: Add Navi text for previously untargetable Spear Moblins
+    CustomMessageManager::Instance->CreateMessage(
+        customMessageTableID, TEXT_SPEAR_MOBLIN_NAVI,
+        CustomMessage("%wMoblin&%cAvoid its spear and attack it&from behind!",
+                      "%wMoblin&%cAvoid its spear and attack it&from behind!",
+                      "%wMoblin&%cAvoid its spear and attack it&from behind!",
+                      TEXTBOX_TYPE_BLUE));
 }

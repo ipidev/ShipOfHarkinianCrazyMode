@@ -2631,12 +2631,12 @@ extern "C" int CustomMessage_RetrieveIfExists(PlayState* play) {
     if (CVarGetInteger("gIpiCrazyMode", 0)) {
         if (textId == TEXT_BACK_ALLEY_DYING_GUARD_FIRST) {
             messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_BACK_ALLEY_DYING_GUARD_FIRST);
-        }
-        if (textId == TEXT_BACK_ALLEY_DYING_GUARD_SECOND) {
+        } else if (textId == TEXT_BACK_ALLEY_DYING_GUARD_SECOND) {
             messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_BACK_ALLEY_DYING_GUARD_SECOND);
-        }
-        if (textId == TEXT_CHILD_RUTO_JABU_JABU_FIRST && play->sceneNum == SCENE_WATER_TEMPLE) {
+        } else if (textId == TEXT_CHILD_RUTO_JABU_JABU_FIRST && play->sceneNum == SCENE_WATER_TEMPLE) {
             messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_CHILD_RUTO_JABU_JABU_FIRST);
+        } else if (textId == TEXT_SPEAR_MOBLIN_NAVI) {
+            messageEntry = CustomMessageManager::Instance->RetrieveMessage(customMessageTableID, TEXT_SPEAR_MOBLIN_NAVI);
         }
     }
     font->charTexBuf[0] = (messageEntry.GetTextBoxType() << 4) | messageEntry.GetTextBoxPosition();
