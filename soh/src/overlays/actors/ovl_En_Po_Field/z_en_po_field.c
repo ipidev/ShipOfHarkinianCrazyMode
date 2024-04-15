@@ -477,7 +477,9 @@ void EnPoField_CirclePlayer(EnPoField* this, PlayState* play) {
         this->actionTimer--;
     }
     if (ABS(temp_v1) < 16) {
-        this->actor.world.rot.y += 512.0f * fabsf(Math_SinS(this->unk_194 * 0x800));
+        //ipi: Speen!
+        f32 speedMult = CVarGetInteger("gIpiCrazyMode", 0) ? 1512.0f : 512.0f;
+        this->actor.world.rot.y += speedMult * fabsf(Math_SinS(this->unk_194 * 0x800));
     }
     Math_ApproachF(&this->scaleModifier, 180.0f, 0.5f, 10.0f);
     Math_ApproachF(&this->actor.home.pos.x, player->actor.world.pos.x, 0.2f, 6.0f);
@@ -772,8 +774,10 @@ void EnPoField_UpdateFlame(EnPoField* this, PlayState* play) {
             return;
         }
         if (Math_StepToF(&this->flameScale, 0.003f, 0.0006f) != 0) {
-            this->flamePosition.x += 2.5f * Math_SinS(this->flameRotation);
-            this->flamePosition.z += 2.5f * Math_CosS(this->flameRotation);
+            //ipi: Faster flame movement
+            f32 flameSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 10.0f : 2.5f;
+            this->flamePosition.x += flameSpeed * Math_SinS(this->flameRotation);
+            this->flamePosition.z += flameSpeed * Math_CosS(this->flameRotation);
         }
         this->flameCollider.dim.pos.x = this->flamePosition.x;
         this->flameCollider.dim.pos.y = this->flamePosition.y;
