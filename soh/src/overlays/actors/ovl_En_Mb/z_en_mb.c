@@ -278,10 +278,18 @@ void EnMb_Init(Actor* thisx, PlayState* play) {
         case ENMB_TYPE_SPEAR_GUARD:
             SkelAnime_InitFlex(play, &this->skelAnime, &gEnMbSpearSkel, &gEnMbSpearStandStillAnim,
                                this->jointTable, this->morphTable, 28);
-            this->actor.colChkInfo.health = 2;
-            this->actor.colChkInfo.mass = MASS_HEAVY;
-            this->maxHomeDist = 1000.0f;
-            this->playerDetectionRange = 1750.0f;
+            //ipi: Setup more realistic values for this otherwise unused enemy variant
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                this->actor.colChkInfo.health = 6;
+                this->actor.colChkInfo.mass = MASS_HEAVY;
+                this->maxHomeDist = 500.0f;
+                this->playerDetectionRange = 500.0f;
+            } else {
+                this->actor.colChkInfo.health = 2;
+                this->actor.colChkInfo.mass = MASS_HEAVY;
+                this->maxHomeDist = 1000.0f;
+                this->playerDetectionRange = 1750.0f;
+            }
             EnMb_SetupSpearGuardLookAround(this);
             break;
         case ENMB_TYPE_CLUB:
@@ -438,7 +446,8 @@ void EnMb_FindWaypointTowardsPlayer(EnMb* this, PlayState* play) {
 void EnMb_SetupSpearGuardLookAround(EnMb* this) {
     Animation_MorphToLoop(&this->skelAnime, &gEnMbSpearLookLeftAndRightAnim, -4.0f);
     this->actor.speedXZ = 0.0f;
-    this->timer1 = Rand_S16Offset(30, 50);
+    //ipi: Wait the shortest amount of time (we still wait for the animation)
+    this->timer1 = CVarGetInteger("gIpiCrazyMode", 0) ? 0 : Rand_S16Offset(30, 50);
     this->state = ENMB_STATE_IDLE;
     EnMb_SetupAction(this, EnMb_SpearGuardLookAround);
 }
@@ -465,6 +474,11 @@ void EnMb_SetupSpearGuardWalk(EnMb* this) {
                      ANIMMODE_LOOP, -4.0f);
     this->actor.speedXZ = 0.59999996f;
     this->timer1 = Rand_S16Offset(50, 70);
+    //ipi: Always charge as soon as possible if within home range
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        u8 isTooFarFromHome = Math_Vec3f_DistXZ(&this->actor.home.pos, &this->actor.world.pos) > this->maxHomeDist;
+        this->timer3 = isTooFarFromHome ? 20 : 0;
+    }
     this->unk_332 = 1;
     this->state = ENMB_STATE_WALK;
     EnMb_SetupAction(this, EnMb_SpearGuardWalk);
@@ -490,6 +504,10 @@ void EnMb_SetupSpearPrepareAndCharge(EnMb* this) {
     this->timer3 = (s16)frameCount + 6;
     Audio_PlayActorSound2(&this->actor, NA_SE_EN_MORIBLIN_SPEAR_AT);
     if (this->actor.params == ENMB_TYPE_SPEAR_GUARD) {
+        //ipi: This timer is used to charge slightly past the player, but needs to start at 0
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->timer2 = 0;
+        }
         EnMb_SetupAction(this, EnMb_SpearGuardPrepareAndCharge);
     } else {
         EnMb_SetupAction(this, EnMb_SpearPatrolPrepareAndCharge);
@@ -650,6 +668,22 @@ void EnMb_SpearGuardLookAround(EnMb* this, PlayState* play) {
         this->timer1--;
         timer1 = this->timer1;
     }
+    //ipi: Allow starting a charge when the Moblin is looking forwards at the player
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.xzDistToPlayer < 500.0f &&
+        Actor_IsFacingPlayer(&this->actor, 0x1388)) {
+        //Animation starts in the centre, then looks left, then right, then back to centre
+        //Allow exiting whenever the head is facing straight forwards
+        static s16 validFrames = 2;
+        s16 animDuration = Animation_GetLastFrame(&gEnMbSpearLookLeftAndRightAnim);
+        s16 halfAnimDuration = animDuration / 2; //Looks forward halfway through the animation
+        s16 curFrame = (s16)this->skelAnime.curFrame;
+        if (curFrame <= validFrames ||
+            (curFrame >= halfAnimDuration-validFrames && curFrame <= halfAnimDuration+validFrames) ||
+            curFrame >= animDuration-validFrames) {
+            EnMb_SetupSpearPrepareAndCharge(this);
+            return;
+        }
+    }
     if (timer1 == 0 && Animation_OnFrame(&this->skelAnime, 0.0f)) {
         EnMb_SetupSpearGuardWalk(this);
     }
@@ -705,7 +739,15 @@ void EnMb_SpearEndChargeQuick(EnMb* this, PlayState* play) {
         } else {
             if (this->actor.params <= ENMB_TYPE_SPEAR_GUARD) {
                 EnMb_SetupSpearGuardWalk(this);
-                this->timer1 = this->timer2 = this->timer3 = 80;
+                //ipi: Set timer values that still return us home, but allow follow-up attacks
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    //timer2 holds whether we connected with the player during the charge or not
+                    this->timer3 = this->timer2 ? 60 : 10; //Timer until we can charge at player
+                    this->timer2 = 60; //Timer to turn towards home location
+                    this->timer1 = 80; //Timer to potentially choose a new action
+                } else {
+                    this->timer1 = this->timer2 = this->timer3 = 80;
+                }
             } else {
                 EnMb_SetupSpearPatrolTurnTowardsWaypoint(this, play);
             }
@@ -817,6 +859,10 @@ void EnMb_SpearGuardPrepareAndCharge(EnMb* this, PlayState* play) {
     if (this->timer3 != 0) {
         this->timer3--;
         Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 0xBB8, 0);
+        //ipi: Original code doesn't correctly update the facing angle here
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->actor.shape.rot.y = this->actor.world.rot.y;
+        }
     } else {
         this->actor.speedXZ = 10.0f;
         this->attack = ENMB_ATTACK_SPEAR;
@@ -827,7 +873,83 @@ void EnMb_SpearGuardPrepareAndCharge(EnMb* this, PlayState* play) {
         }
     }
 
-    if (relYawTowardsPlayerAbs > 0x1388) {
+    //ipi: Check for grabbing and launching the player, similar to the spear patrol
+    Player* player = GET_PLAYER(play);
+    u8 hasHitPlayer = false;
+    //ipi: Stop charging only when we've sufficiently passed the player, or if we're about to run off an edge
+    u8 shouldStopCharge = relYawTowardsPlayerAbs > 0x1388;
+    if (CVarGetInteger("gIpiCrazyMode", 0)) {
+        //Always stop if we're about to charge off an edge
+        if (!Actor_TestFloorInDirection(&this->actor, play, 110.0f, this->actor.world.rot.y)) {
+            shouldStopCharge = true;
+        } else if (this->timer2 > 0) {
+            //If post-charge timer is active, stop when hitting 0
+            shouldStopCharge = DECR(this->timer2) == 0;
+        } else {
+            //Keep charging, but eventually stop after we've charged past the player
+            shouldStopCharge = false;
+            Vec3f moblinToPlayer;
+            Math_Vec3f_Diff(&player->actor.world.pos, &this->actor.world.pos, &moblinToPlayer);
+            if (Math3D_Cos(&this->actor.velocity, &moblinToPlayer) < 0.0f) {
+                this->timer2 = 7;
+            }
+        }
+
+        //Most of the stuff below is copied from EnMb_SpearPatrolPrepareAndCharge
+        //Attach the player to us if we've charged into them
+        if (this->attackCollider.base.atFlags & AT_HIT) {
+            if (this->attackCollider.base.at == &player->actor) {
+                if (!shouldStopCharge && !(player->stateFlags2 & PLAYER_STATE2_GRABBED_BY_ENEMY)) {
+                    if (player->invincibilityTimer < 0) {
+                        if (player->invincibilityTimer < -39) {
+                            player->invincibilityTimer = 0;
+                        } else {
+                            player->invincibilityTimer = 0;
+                            play->damagePlayer(play, -8);
+                        }
+                    }
+                    if (!(this->attackCollider.base.atFlags & AT_BOUNCED)) {
+                        Audio_PlayActorSound2(&player->actor, NA_SE_PL_BODY_HIT);
+                    }
+                    if (play->grabPlayer(play, player)) {
+                        player->actor.parent = &this->actor;
+                        //ipi: We've attached the player - eventually stop charging
+                        this->timer2 = 15;
+                    }
+                }
+                hasHitPlayer = true;
+            } else {
+                this->attackCollider.base.atFlags &= ~AT_HIT;
+            }
+        }
+
+        //Update the grabbed player's position
+        if ((player->stateFlags2 & PLAYER_STATE2_GRABBED_BY_ENEMY) && player->actor.parent == &this->actor) {
+            player->actor.world.pos.x = this->actor.world.pos.x + Math_CosS(this->actor.shape.rot.y) * 10.0f +
+                                        Math_SinS(this->actor.shape.rot.y) * 70.0f;
+            hasHitPlayer = true;
+            player->actor.world.pos.z = this->actor.world.pos.z + Math_SinS(this->actor.shape.rot.y) * 10.0f +
+                                        Math_CosS(this->actor.shape.rot.y) * 70.0f;
+            player->av2.actionVar2 = 0;
+            player->actor.speedXZ = 0.0f;
+            player->actor.velocity.y = 0.0f;
+        }
+    }
+    if (shouldStopCharge) {
+        //ipi: Fling the player away at the end of the charge
+        if (CVarGetInteger("gIpiCrazyMode", 0)) {
+            if (hasHitPlayer || (player->stateFlags2 & PLAYER_STATE2_GRABBED_BY_ENEMY)) {
+                this->attackCollider.base.atFlags &= ~AT_HIT;
+                if (player->stateFlags2 & PLAYER_STATE2_GRABBED_BY_ENEMY) {
+                    player->stateFlags2 &= ~PLAYER_STATE2_GRABBED_BY_ENEMY;
+                    player->actor.parent = NULL;
+                    player->av2.actionVar2 = 200;
+                    func_8002F71C(play, &this->actor, 10.0f, this->actor.world.rot.y, 4.0f);
+                }
+            }
+            //timer2 is unused in EnMb_SpearEndChargeQuick, use it as a flag to determine if we hit the player
+            this->timer2 = hasHitPlayer;
+        }
         this->attack = ENMB_ATTACK_NONE;
         EnMb_SetupSpearEndChargeQuick(this);
     }
@@ -1154,7 +1276,9 @@ void EnMb_SpearGuardWalk(EnMb* this, PlayState* play) {
     f32 playSpeedAbs;
 
     relYawTowardsPlayer = ABS(relYawTowardsPlayer);
-    Math_SmoothStepToF(&this->actor.speedXZ, 0.59999996f, 0.1f, 1.0f, 0.0f);
+    //ipi: Move faster, since we're smaller than normal spear Moblins
+    f32 walkSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 1.0f : 0.59999996f;
+    Math_SmoothStepToF(&this->actor.speedXZ, walkSpeed, 0.1f, 1.0f, 0.0f);
     this->skelAnime.playSpeed = this->actor.speedXZ;
     prevFrame = this->skelAnime.curFrame;
     SkelAnime_Update(&this->skelAnime);
@@ -1164,16 +1288,23 @@ void EnMb_SpearGuardWalk(EnMb* this, PlayState* play) {
     playSpeedAbs = ABS(this->skelAnime.playSpeed);
     if (this->timer3 == 0 &&
         Math_Vec3f_DistXZ(&this->actor.home.pos, &player->actor.world.pos) < this->playerDetectionRange) {
-        Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, 0x2EE, 0);
+        //ipi: Turn faster, since we're smaller than normal spear Moblins
+        s16 turnSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 0x600 : 0x2EE;
+        Math_SmoothStepToS(&this->actor.world.rot.y, this->actor.yawTowardsPlayer, 1, turnSpeed, 0);
         this->actor.flags |= ACTOR_FLAG_TARGETABLE;
         if (this->actor.xzDistToPlayer < 500.0f && relYawTowardsPlayer < 0x1388) {
             EnMb_SetupSpearPrepareAndCharge(this);
         }
     } else {
-        this->actor.flags &= ~ACTOR_FLAG_TARGETABLE;
+        //ipi: Why does the original do this?
+        if (!CVarGetInteger("gIpiCrazyMode", 0)) {
+            this->actor.flags &= ~ACTOR_FLAG_TARGETABLE;
+        }
         if (Math_Vec3f_DistXZ(&this->actor.world.pos, &this->actor.home.pos) > this->maxHomeDist || this->timer2 != 0) {
             yawTowardsHome = Math_Vec3f_Yaw(&this->actor.world.pos, &this->actor.home.pos);
-            Math_SmoothStepToS(&this->actor.world.rot.y, yawTowardsHome, 1, 0x2EE, 0);
+            //ipi: Turn faster, since we're smaller than normal spear Moblins
+            s16 turnSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? 0x400 : 0x2EE;
+            Math_SmoothStepToS(&this->actor.world.rot.y, yawTowardsHome, 1, turnSpeed, 0);
         }
         if (this->timer2 != 0) {
             this->timer2--;
@@ -1183,10 +1314,16 @@ void EnMb_SpearGuardWalk(EnMb* this, PlayState* play) {
         }
         if (this->timer2 == 0) {
             Audio_PlayActorSound2(&this->actor, NA_SE_EN_MORIBLIN_VOICE);
+            //ipi: Reset snort timer here, similar to spear patrol
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                this->timer2 = Rand_S16Offset(30, 70);
+            }
         }
         this->timer1--;
         if (this->timer1 == 0) {
-            if (Rand_ZeroOne() > 0.7f) {
+            //ipi: Never stop to look around if we're outside our home radius
+            u8 forceReset = CVarGetInteger("gIpiCrazyMode", 0) && Math_Vec3f_DistXZ(&this->actor.world.pos, &this->actor.home.pos) > this->maxHomeDist;
+            if (Rand_ZeroOne() > 0.7f || forceReset) {
                 this->timer1 = Rand_S16Offset(50, 70);
                 this->timer2 = Rand_S16Offset(15, 40);
             } else {
@@ -1307,7 +1444,13 @@ void EnMb_SpearDamaged(EnMb* this, PlayState* play) {
     Math_SmoothStepToF(&this->actor.speedXZ, 0.0f, 1.0f, 0.5f, 0.0f);
     if (SkelAnime_Update(&this->skelAnime)) {
         if (this->actor.params <= ENMB_TYPE_SPEAR_GUARD) {
-            EnMb_SetupSpearGuardLookAround(this);
+            //ipi: Try to retaliate instead of standing around
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                EnMb_SetupSpearGuardWalk(this);
+                this->timer3 = 0;
+            } else {
+                EnMb_SetupSpearGuardLookAround(this);
+            }
         } else {
             EnMb_SetupSpearPatrolImmediateCharge(this);
         }
