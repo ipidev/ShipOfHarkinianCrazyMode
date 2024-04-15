@@ -794,7 +794,7 @@ void Play_Init(GameState* thisx) {
     if (CVarGetInteger("gIpiCrazyMode", 0)) {
         CrazyModeEnemyAmbush* ambushTable;
         s32 ambushTableLength;
-        if (Player_GetEnemyAmbushTable(play, &ambushTable, &ambushTableLength)) {
+        if (Player_GetEnemyAmbushTable(play, &ambushTable, &ambushTableLength) != ENEMY_AMBUSH_STATUS_INVALID) {
             player->timeUntilEnemyAmbush = (s16)Rand_ZeroFloat(300.0f) + 300;
         } else {
             player->timeUntilEnemyAmbush = -1;

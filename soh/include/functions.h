@@ -2478,7 +2478,12 @@ s16 Actor_CrazyModeInitCivilianDamage(ColliderCylinder* cylinderCollider);
 s16 Actor_CrazyModeCheckCivilianDamage(PlayState* play, Actor* actor, ColliderCylinder* cylinderCollider);
 
 //ipi: Allow the player to be randomly ambushed by enemies
-s16 Player_GetEnemyAmbushTable(PlayState* play, CrazyModeEnemyAmbush** outTable, s32* outLength);
+typedef enum {
+    ENEMY_AMBUSH_STATUS_INVALID,
+    ENEMY_AMBUSH_STATUS_DELAYED,
+    ENEMY_AMBUSH_STATUS_READY,
+} EnemyAmbushStatus;
+EnemyAmbushStatus Player_GetEnemyAmbushTable(PlayState* play, CrazyModeEnemyAmbush** outTable, s32* outLength);
 
 //ipi: Prevent further action if the shooting gallery cucco has been hit
 s16 Play_HasHitShootingGalleryCucco(PlayState* play);

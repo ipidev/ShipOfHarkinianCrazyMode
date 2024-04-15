@@ -16419,7 +16419,7 @@ void Player_TrySpawnEnemyAmbush(Player* this, PlayState* play) {
             //Get the enemy ambush table. If not found, reset timer (we may not be in a valid room)
             CrazyModeEnemyAmbush* ambushTable;
             s32 ambushTableLength;
-            if (!Player_GetEnemyAmbushTable(play, &ambushTable, &ambushTableLength)) {
+            if (Player_GetEnemyAmbushTable(play, &ambushTable, &ambushTableLength) < ENEMY_AMBUSH_STATUS_READY) {
                 this->timeUntilEnemyAmbush = 200;
                 return;
             }

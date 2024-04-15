@@ -6400,65 +6400,73 @@ s16 Actor_CrazyModeCheckCivilianDamage(PlayState* play, Actor* actor, ColliderCy
 }
 
 //ipi: Allow the player to be randomly ambushed by enemies
-s16 Player_GetEnemyAmbushTable(PlayState* play, CrazyModeEnemyAmbush** outTable, s32* outLength) {
+EnemyAmbushStatus Player_GetEnemyAmbushTable(PlayState* play, CrazyModeEnemyAmbush** outTable, s32* outLength) {
     static CrazyModeEnemyAmbush sForestTable[] = {
-        { ACTOR_EN_DEKUBABA, 0, 150.0f, 0.0f, true },
-        { ACTOR_EN_DEKUBABA, 1, 250.0f, 0.0f, true },
-        { ACTOR_EN_KAREBABA, 0, 100.0f, 0.0f, true },
-        { ACTOR_EN_DEKUNUTS, 0, 200.0f, 0.0f, true },
-        { ACTOR_EN_GOMA, 7, 200.0f, 0.0f, true },
-        { ACTOR_EN_WF, 0, 100.0f, 0.0f, false },
+        { ACTOR_EN_DEKUBABA, 0, 150.0f, 0.0f, true },   //Deku Baba
+        { ACTOR_EN_DEKUBABA, 1, 250.0f, 0.0f, true },   //Large Deku Baba
+        { ACTOR_EN_KAREBABA, 0, 100.0f, 0.0f, true },   //Withered Deku Baba
+        { ACTOR_EN_DEKUNUTS, 0, 200.0f, 0.0f, true },   //Mad Scrub
+        { ACTOR_EN_GOMA, 7, 200.0f, 0.0f, true },       //Gohma Larva
+        { ACTOR_EN_MB, -1, 250.0f, 0.0f, true },        //Spear Guard Moblin
+        { ACTOR_EN_WF, 0, 100.0f, 0.0f, false },        //Wolfos
     };
     static CrazyModeEnemyAmbush sMountainTable[] = {
-        { ACTOR_EN_TITE, -1, 200.0f, 0.0f, true },
-        { ACTOR_EN_TITE, -1, 200.0f, 0.0f, true },
-        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },
-        { ACTOR_EN_DODOJR, 0, 100.0f, 0.0f, false },
-        { ACTOR_EN_DODONGO, -1, 300.0f, 0.0f, true },
+        { ACTOR_EN_TITE, -1, 200.0f, 0.0f, true },      //Red Tektite
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },  //Keese
+        { ACTOR_EN_DODOJR, 0, 100.0f, 0.0f, false },    //Baby Dodongo
+        { ACTOR_EN_BB, -2, 200.0f, 0.0f, true },        //Red Bubble
+        { ACTOR_EN_BW, 0, 200.0f, 0.0f, true },         //Torch Slug
+        { ACTOR_EN_AM, -1, 200.0f, 0.0f, true },        //Armos
+        { ACTOR_EN_DODONGO, -1, 300.0f, 0.0f, true },   //Dodongo
     };
     static CrazyModeEnemyAmbush sLakeTable[] = {
-        { ACTOR_EN_TITE, -2, 200.0f, 0.0f, true },
-        { ACTOR_EN_CROW, 0, 200.0f, 200.0f, true },
-        { ACTOR_EN_SB, 0, 200.0f, 0.0f, true },
-        { ACTOR_EN_NY, 0, 200.0f, 0.0f, true },
-        { ACTOR_EN_FZ, 0, 250.0f, 0.0f, true },
-        { ACTOR_EN_BILI, 0, 200.0f, 100.0f, true },
+        { ACTOR_EN_TITE, -2, 200.0f, 0.0f, true },      //Blue Tektite
+        { ACTOR_EN_CROW, 0, 200.0f, 200.0f, true },     //Guay
+        { ACTOR_EN_SB, 0, 200.0f, 0.0f, true },         //Shellblade
+        { ACTOR_EN_NY, 0, 200.0f, 0.0f, true },         //Spike
+        { ACTOR_EN_FZ, 0, 250.0f, 0.0f, true },         //Freezzard
+        { ACTOR_EN_BILI, 0, 200.0f, 100.0f, true },     //Biri
     };
     static CrazyModeEnemyAmbush sGraveyardTable[] = {
-        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },
-        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },
-        { ACTOR_EN_FIREFLY, 3, 200.0f, 0.0f, true },
-        { ACTOR_EN_FIREFLY, 3, 200.0f, 0.0f, true },
-        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },
-        { ACTOR_EN_RD, 32766, 350.0f, 0.0f, true },
-        { ACTOR_EN_RR, 0, 250.0f, 0.0f, true },
-        { ACTOR_EN_WALLMAS, 1, 0.0f, 0.0f, false },
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },  //Keese
+        { ACTOR_EN_FIREFLY, 3, 200.0f, 0.0f, true },    //Keese (perched)
+        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },         //ReDead
+        { ACTOR_EN_RD, 32766, 350.0f, 0.0f, true },     //Gibdo
+        { ACTOR_EN_RR, 0, 250.0f, 0.0f, true },         //Like-Like
+        { ACTOR_EN_BB, -1, 200.0f, 0.0f, true },        //Blue Bubble
+        { ACTOR_EN_FLOORMAS, 0, 300.0f, 0.0f, true },   //Floormaster
+        { ACTOR_EN_WALLMAS, 1, 0.0f, 0.0f, false },     //Wallmaster
     };
     static CrazyModeEnemyAmbush sDesertTable[] = {
-        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },
-        { ACTOR_EN_FIREFLY, 3, 200.0f, 0.0f, true },
-        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },
-        { ACTOR_EN_RD, 32766, 350.0f, 0.0f, true },
-        { ACTOR_EN_IK, 2, 300.0f, 0.0f, false },
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 150.0f, true },  //Keese
+        { ACTOR_EN_FIREFLY, 3, 200.0f, 0.0f, true },    //Keese (perched)
+        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },         //ReDead
+        { ACTOR_EN_RD, 32766, 350.0f, 0.0f, true },     //Gibdo
+        { ACTOR_EN_IK, 2, 250.0f, 0.0f, true },         //Iron Knuckle (black)
+        { ACTOR_EN_IK, 3, 250.0f, 0.0f, true },         //Iron Knuckle (white)
+        { ACTOR_EN_TUBO_TRAP, 0, 250.0f, 0.0f, true },  //Flying Pot
     };
     static CrazyModeEnemyAmbush sFieldTable[] = {
-        { ACTOR_EN_SKB, -1, 100.0f, 0.0f, false },
-        { ACTOR_EN_SKB, -20, 150.0f, 0.0f, false },
-        { ACTOR_EN_TEST, 2, 200.0f, 0.0f, false },
-        { ACTOR_EN_TITE, -1, 300.0f, 0.0f, true },
-        { ACTOR_EN_CROW, 0, 200.0f, 200.0f, true },
-        { ACTOR_EN_FIREFLY, 2, 150.0f, 200.0f, true },
-        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },
-        { ACTOR_EN_PEEHAT, 1, 200.0f, 50.0f, true },
-        { ACTOR_EN_PEEHAT, -1, 400.0f, 0.0f, true },
+        { ACTOR_EN_SKB, -1, 100.0f, 0.0f, false },      //Stalchild
+        { ACTOR_EN_SKB, -20, 150.0f, 0.0f, false },     //Large Stalchild
+        { ACTOR_EN_TEST, 2, 200.0f, 0.0f, false },      //Stalfos
+        { ACTOR_EN_TITE, -1, 300.0f, 0.0f, true },      //Red Tektite
+        { ACTOR_EN_CROW, 0, 200.0f, 200.0f, true },     //Guay
+        { ACTOR_EN_FIREFLY, 2, 150.0f, 200.0f, true },  //Keese
+        { ACTOR_EN_RD, 1, 350.0f, 0.0f, true },         //ReDead
+        { ACTOR_EN_MB, -1, 250.0f, 0.0f, true },        //Spear Guard Moblin
+        { ACTOR_EN_PEEHAT, 1, 200.0f, 50.0f, true },    //Peahat Larva
+        { ACTOR_EN_PEEHAT, -1, 400.0f, 0.0f, true },    //Peahat
     };
     //Macro to easily return a table and its length
-#define RETURN_ENEMY_AMBUSH_TABLE(table) *outTable = &table; *outLength = sizeof(table) / sizeof(CrazyModeEnemyAmbush); return true;
+#define RETURN_ENEMY_AMBUSH_TABLE(table) *outTable = &table; *outLength = sizeof(table) / sizeof(CrazyModeEnemyAmbush); return ENEMY_AMBUSH_STATUS_READY;
     //Decide which table should be used
     switch (play->sceneNum) {
+        case SCENE_SACRED_FOREST_MEADOW:
+            if (!Flags_GetSwitch(play, 0x1F)) return ENEMY_AMBUSH_STATUS_DELAYED; //Wolfos gate flag
+            //Fallthrough
         case SCENE_KOKIRI_FOREST:
         case SCENE_LOST_WOODS:
-        case SCENE_SACRED_FOREST_MEADOW:
             RETURN_ENEMY_AMBUSH_TABLE(sForestTable);
         case SCENE_GORON_CITY:
             if (play->roomCtx.curRoom.num == 0) return false;
@@ -6485,7 +6493,7 @@ s16 Player_GetEnemyAmbushTable(PlayState* play, CrazyModeEnemyAmbush** outTable,
         case SCENE_LON_LON_RANCH:
             RETURN_ENEMY_AMBUSH_TABLE(sFieldTable);
         default:
-            return false;
+            return ENEMY_AMBUSH_STATUS_INVALID;
     };
 #undef RETURN_ENEMY_AMBUSH_TABLE
 }
