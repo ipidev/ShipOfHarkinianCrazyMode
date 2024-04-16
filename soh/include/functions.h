@@ -2488,6 +2488,9 @@ EnemyAmbushStatus Player_GetEnemyAmbushTable(PlayState* play, CrazyModeEnemyAmbu
 //ipi: Prevent further action if the shooting gallery cucco has been hit
 s16 Play_HasHitShootingGalleryCucco(PlayState* play);
 
+//ipi: Sometimes drop rupees when the player is damaged
+s16 Player_DropRupeesFromDamage(Player* this, PlayState* play, s16 damage);
+
 #ifdef __cplusplus
 #undef this
 };

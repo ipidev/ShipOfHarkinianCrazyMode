@@ -16472,3 +16472,55 @@ void Player_TrySpawnEnemyAmbush(Player* this, PlayState* play) {
     }
 }
 
+//ipi: Sometimes drop rupees when the player is damaged
+s16 Player_DropRupeesFromDamage(Player* this, PlayState* play, s16 damage) {
+    //Ignore damage of less than 1/4 heart
+    if (damage < 0x04) return 0;
+    //Randomly don't drop rupees, scaling based on recieved damage
+    f32 dropChance = damage / (f32)0x10; //1/4 heart = 25% chance, 1/2 heart = 50%, etc.
+    if (Rand_ZeroOne() < 1.0f - dropChance) return 0;
+    //Scale number of rupees dropped with damage
+    s16 minRupeesToDrop = 1;
+    s16 maxRupeesToDrop = 3;
+    if (damage > 0x04) { //This actually results in the same ranges for 1/2 heart
+        maxRupeesToDrop = damage - 5;
+        minRupeesToDrop = maxRupeesToDrop / 2;
+    }
+    assert(minRupeesToDrop > 0 && maxRupeesToDrop > 0);
+    minRupeesToDrop = CLAMP_MAX(minRupeesToDrop, gSaveContext.rupees);
+    maxRupeesToDrop = CLAMP_MAX(maxRupeesToDrop, gSaveContext.rupees);
+    //Choose a number of rupees to drop
+    s16 rupeesToDrop = Rand_S16Offset(minRupeesToDrop, maxRupeesToDrop - minRupeesToDrop);
+    s16 rupeesRemaining = rupeesToDrop;
+    for (s16 i = 0; i < 10 && rupeesRemaining > 0; i++) {
+        //Spawn the rupee with the largest value that fits
+        s16 params;
+        if (rupeesRemaining > 50) {
+            params = ITEM00_RUPEE_PURPLE;
+            rupeesRemaining -= 50;
+        } else if (rupeesRemaining > 20) {
+            params = ITEM00_RUPEE_RED;
+            rupeesRemaining -= 20;
+        } else if (rupeesRemaining > 5) {
+            params = ITEM00_RUPEE_BLUE;
+            rupeesRemaining -= 5;
+        } else {
+            params = ITEM00_RUPEE_GREEN;
+            rupeesRemaining -= 1;
+        }
+        //Randomly offset the rupee spawn
+        s16 randomAngle = (s16)Rand_Next();
+        Vec3f spawnPos;
+        spawnPos.x = this->actor.world.pos.x + (Math_SinS(randomAngle) * 20.0f);
+        spawnPos.y = this->actor.world.pos.y + 20.0f;
+        spawnPos.z = this->actor.world.pos.z + (Math_CosS(randomAngle) * 20.0f);
+        EnItem00* rupee = Item_DropCollectible(play, &spawnPos, params);
+        if (rupee != NULL) {
+            rupee->actor.world.rot.y = randomAngle;
+            rupee->actor.speedXZ *= 1.0f + Rand_Centered(0.25f); //Slightly vary speed
+            rupee->preventCollectionTimer = 15; //Ensure player can't collect it immediately
+        }
+    }
+    Rupees_ChangeBy(-(rupeesToDrop - rupeesRemaining));
+    return rupeesToDrop - rupeesRemaining;
+}

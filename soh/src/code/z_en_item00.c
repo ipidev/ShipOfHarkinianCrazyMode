@@ -856,6 +856,12 @@ void EnItem00_Update(Actor* thisx, PlayState* play) {
         return;
     }
 
+    //ipi: Extra parameter to avoid instantly collecting dropped rupees
+    if (this->preventCollectionTimer > 0) {
+        this->preventCollectionTimer--;
+        return;
+    }
+
     if (!((this->actor.xzDistToPlayer <= 30.0f) && (this->actor.yDistToPlayer >= -50.0f) &&
           (this->actor.yDistToPlayer <= 50.0f))) {
         if (!Actor_HasParent(&this->actor, play)) {

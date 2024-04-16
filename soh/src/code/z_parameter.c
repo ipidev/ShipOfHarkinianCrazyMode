@@ -3130,6 +3130,10 @@ s32 Health_ChangeBy(PlayState* play, s16 healthChange) {
         gSaveContext.health = 0;
         return 0;
     } else {
+        //ipi: Sometimes drop rupees when the player is damaged
+        if (CVarGetInteger("gIpiCrazyMode", 0) && healthChange < 0) {
+            Player_DropRupeesFromDamage(GET_PLAYER(play), play, -healthChange);
+        }
         return 1;
     }
 }

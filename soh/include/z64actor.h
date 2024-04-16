@@ -286,6 +286,8 @@ typedef struct EnItem00 {
     /* 0x160 */ ColliderCylinder collider;
     s16 ogParams;
     GetItemEntry randoGiEntry;
+    //ipi: Extra parameter to avoid instantly collecting dropped rupees
+    u8 preventCollectionTimer;
 } EnItem00; // size = 0x1AC
 
 // Only A_OBJ_SIGNPOST_OBLONG and A_OBJ_SIGNPOST_ARROW are used in room files.
