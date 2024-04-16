@@ -305,8 +305,19 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
 
     atTouched = (this->actor.params != ARROW_NORMAL_LIT) && (this->actor.params <= ARROW_SEED) &&
                 (this->collider.base.atFlags & AT_HIT);
+    //ipi: Extra check to collide with water to create ice blocks
+    u8 shouldFreezeWater = false;
+    if (CVarGetInteger("gIpiCrazyMode", 0) && this->actor.params == ARROW_ICE && !atTouched) {
+        WaterBox* waterBox;
+        f32 waterHeight;
+        if (WaterBox_GetSurface1(play, &play->colCtx, this->actor.world.pos.x, this->actor.world.pos.z, &waterHeight, &waterBox) &&
+            this->actor.world.pos.y <= waterHeight) {
+            shouldFreezeWater = true;
+            this->actor.world.pos.y = waterHeight - 15.0f;
+        }
+    }
 
-    if (atTouched || this->touchedPoly) {
+    if (atTouched || this->touchedPoly || shouldFreezeWater) {
         if (this->actor.params >= ARROW_SEED) {
             if (atTouched) {
                 this->actor.world.pos.x = (this->actor.world.pos.x + this->actor.prevPos.x) * 0.5f;
@@ -365,6 +376,11 @@ void EnArrow_Fly(EnArrow* this, PlayState* play) {
                 }
 
                 Audio_PlayActorSound2(&this->actor, NA_SE_IT_ARROW_STICK_OBJ);
+                this->hitFlags |= 1;
+            } else if (shouldFreezeWater) {
+                //ipi: Stop once we hit the surface of the water
+                EnArrow_SetupAction(this, func_809B45E0);
+                this->timer = 60;
                 this->hitFlags |= 1;
             }
         }
