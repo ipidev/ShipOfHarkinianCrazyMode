@@ -308,7 +308,8 @@ void func_80AE2A10(EnRd* this, PlayState* play) {
 void func_80AE2B90(EnRd* this, PlayState* play) {
     Animation_Change(&this->skelAnime, &gGibdoRedeadWalkAnim, 1.0f, 4.0f,
                      Animation_GetLastFrame(&gGibdoRedeadWalkAnim), ANIMMODE_LOOP_INTERP, -4.0f);
-    this->actor.speedXZ = 0.4f;
+    //ipi: Faster!
+    this->actor.speedXZ = CVarGetInteger("gIpiCrazyMode", 0) ? 0.8f : 0.4f;
     this->unk_31B = 4;
     EnRd_SetupAction(this, func_80AE2C1C);
 }
@@ -321,7 +322,8 @@ void func_80AE2C1C(EnRd* this, PlayState* play) {
     s32 pad;
     s16 sp32 = this->actor.yawTowardsPlayer - this->actor.shape.rot.y - this->unk_30E - this->unk_310;
 
-    this->skelAnime.playSpeed = this->actor.speedXZ;
+    //ipi: Whee!!
+    this->skelAnime.playSpeed = CVarGetInteger("gIpiCrazyMode", 0) ? this->actor.speedXZ * 3.0f : this->actor.speedXZ;
     Math_SmoothStepToS(&this->actor.shape.rot.y, this->actor.yawTowardsPlayer, 1, 0xFA, 0);
     Math_SmoothStepToS(&this->unk_30E, 0, 1, 0x64, 0);
     Math_SmoothStepToS(&this->unk_310, 0, 1, 0x64, 0);
@@ -499,7 +501,13 @@ void func_80AE3454(EnRd* this, PlayState* play) {
             this->unk_304++;
             play->damagePlayer(play, -8);
             func_800AA000(this->actor.xzDistToPlayer, 0xFF, 1, 0xC);
-            this->unk_319 = 20;
+            //ipi: Attack twice as fast
+            if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                this->skelAnime.playSpeed = 2.0f;
+                this->unk_319 = 10;
+            } else {
+                this->unk_319 = 20;
+            }
         case 0:
             Math_SmoothStepToS(&this->unk_30E, 0, 1, 0x5DC, 0);
             Math_SmoothStepToS(&this->unk_310, 0, 1, 0x5DC, 0);
@@ -525,7 +533,8 @@ void func_80AE3454(EnRd* this, PlayState* play) {
                                0.0f);
             Math_SmoothStepToS(&this->actor.shape.rot.y, player->actor.shape.rot.y, 1, 0x1770, 0);
 
-            if (this->skelAnime.curFrame == 0.0f) {
+            //ipi: More reliable to play sound when dealing damage instead
+            if (this->skelAnime.curFrame == 0.0f && !CVarGetInteger("gIpiCrazyMode", 0)) {
                 Audio_PlayActorSound2(&this->actor, NA_SE_EN_REDEAD_ATTACK);
             }
             this->unk_319--;
@@ -533,7 +542,13 @@ void func_80AE3454(EnRd* this, PlayState* play) {
             if (this->unk_319 == 0) {
                 play->damagePlayer(play, -8);
                 func_800AA000(this->actor.xzDistToPlayer, 0xF0, 1, 0xC);
-                this->unk_319 = 20;
+                //ipi: Attack twice as fast
+                if (CVarGetInteger("gIpiCrazyMode", 0)) {
+                    this->unk_319 = 10;
+                    Audio_PlayActorSound2(&this->actor, NA_SE_EN_REDEAD_ATTACK);
+                } else {
+                    this->unk_319 =  20;
+                }
                 Player_PlaySfx(&player->actor, NA_SE_VO_LI_DAMAGE_S + player->ageProperties->unk_92);
             }
             break;
