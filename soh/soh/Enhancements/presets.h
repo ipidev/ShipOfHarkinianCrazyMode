@@ -561,6 +561,9 @@ const std::vector<PresetEntry> vanillaPlusPresetEntries = {
     PRESET_ENTRY_S32("gQuickPutaway", 1),
     // Skip save confirmation
     PRESET_ENTRY_S32("gSkipSaveConfirmation", 1),
+
+    //ipi: Enable crazy mode by default
+    PRESET_ENTRY_S32("gIpiCrazyMode", 1),
 };
 
 const std::vector<PresetEntry> enhancedPresetEntries = {
@@ -690,6 +693,9 @@ const std::vector<PresetEntry> enhancedPresetEntries = {
 
     // Autosave
     PRESET_ENTRY_S32("gAutosave", AUTOSAVE_LOCATION_AND_MAJOR_ITEMS),
+
+    //ipi: Enable crazy mode by default
+    PRESET_ENTRY_S32("gIpiCrazyMode", 1),
 };
 
 const std::vector<PresetEntry> randomizerPresetEntries = {
@@ -855,6 +861,9 @@ const std::vector<PresetEntry> randomizerPresetEntries = {
     PRESET_ENTRY_S32("gNoInputForCredits", 1),
 
     PRESET_ENTRY_S32("gFastFarores", 1),
+
+    //ipi: Enable crazy mode by default
+    PRESET_ENTRY_S32("gIpiCrazyMode", 1),
 };
 
 const std::vector<PresetEntry> spockRacePresetEntries = {
