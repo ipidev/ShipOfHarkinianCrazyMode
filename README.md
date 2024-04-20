@@ -1,3 +1,19 @@
+# ipi's Crazy Mode
+
+This is a mod of the regular Ship of Harkinian build that adds an optional "crazy mode", which changes enemies, items and other gameplay behaviour. Generally, the enemies are more agressive and the game is more difficult, but there may be some new behaviours that aid you in your quest! If you're an experienced player looking for a bit more variety, this might be the mod for you.
+
+It can be enabled at any time under **Enhancements > Gameplay > Difficulty Options > ipi's Crazy Mode**. Disabling it should return gameplay to normal (though in some cases this may need a scene change).
+
+Note for playing with randomizer active: there are no changes to logic, and everything should remain logically beatable as before. However, some items may be more powerful and allow you to circumvent logic.
+
+A full list of changes won't be written out, since I think that takes away the fun in discovering them, but if you're very curious you can always look at the commit history.
+
+This mod is essentially complete, though some bugs may remain. This release is provided as-is and I have no plans to develop it further - it's already taken up too much of my free time!
+
+The normal `README.md` text is below.
+
+***
+
 ![Ship of Harkinian](docs/shiptitle.darkmode.png#gh-dark-mode-only)
 ![Ship of Harkinian](docs/shiptitle.lightmode.png#gh-light-mode-only)
 
